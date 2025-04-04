@@ -7,6 +7,7 @@ from flask import Flask
 app = Flask(__name__)
 
 # Configure database URI
+# ** TEMPORARY URL**
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///quickfi.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
