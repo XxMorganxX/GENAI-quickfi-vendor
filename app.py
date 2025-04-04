@@ -32,3 +32,10 @@ def upload_pdf():
 @app.route("/account/<int:account_id>/", methods=["PATCH"])
 def update_account(account_id):
     pass
+
+def main():
+    app.run(host="0.0.0.0", port=8000, debug=True)
+
+
+if __name__ == "__main__":
+    main()

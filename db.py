@@ -1,13 +1,18 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import Flask
+from flask import Flask
 
+# Create the Flask application
 app = Flask(__name__)
-"""Establishes connection with database"""
-app.config["DatabaseURL"] = " " #fill in
 
-db = SQLAlchemy(app)
+# Configure database URI
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///quickfi.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Initialize SQLAlchemy with the Flask app
+db = SQLAlchemy()
+db.init_app(app)
 
 class Account(db.Model):
     """Account model
@@ -78,10 +83,14 @@ class Equipment(db.Model):
     lender = db.relationship("Lender", back_populates = "equipment")
     vendor = db.relationship("Vendor", back_populates = "equipment")
 
+# Move table creation into a function that can be called with app context
+def init_db():
+    with app.app_context():
+        db.create_all()
 
-"""Creates all tables"""
-with app.app_context():
-    db.create_all()
+# Create tables when this module is run directly
+if __name__ == "__main__":
+    init_db()
 
 class DatabaseDriver:
     """
