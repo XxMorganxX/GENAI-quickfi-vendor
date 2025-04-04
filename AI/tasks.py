@@ -9,6 +9,14 @@ Flagged object wrapper
 - This will allow us to easily check if the object should be flagged and to store the reason for flagging
 """
 
+
+
+"""
+Task 1 - Check Notion
+
+- How should we store the flagging vendors?
+- Replace raise "flaggedobject" with the flagging logic
+"""
 def task_one(account_id, vendor_id):
     try:
         # Use DatabaseDriver directly instead of HTTP request
