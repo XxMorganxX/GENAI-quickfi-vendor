@@ -46,6 +46,22 @@ class Account(db.Model):
     #one to many
     equipment = db.relationship("Equipment", back_populates = "account")
 
+    def __init__(self, **kwargs):
+        self.Name = kwargs.get("name", "")
+        self.Street = kwargs.get("street", "")
+        self.City = kwargs.get("city", "")
+        self.State = kwargs.get("state", "")
+        self.ZIP = kwargs.get("zip", 0)
+        self.LiabilityEmail = kwargs.get("liability_email", "")
+        self.PropertyEmail = kwargs.get("property_email", "")
+        self.InsuranceFolderID = kwargs.get("insurance_folder_id", "")
+        self.LiabilityExpirationDate = kwargs.get("liability_expiration_date", "")
+        self.PropertyExpirationDate = kwargs.get("property_expiration_date", "")
+        self.InsuranceCoordinator = kwargs.get("insurance_coordinator", "")
+
+
+
+
 class Vendor(db.Model):
     """Vendor model"""
     __tablename__ = "Vendor"
@@ -60,9 +76,20 @@ class Vendor(db.Model):
     DateScanned = db.Column(db.Date)
     Flags = db.Column(db.Integer)
 
-
     #one to many
     equipment = db.relationship("Equipment", back_populates = "vendor")
+
+    def __init__(self, **kwargs):
+        self.Name = kwargs.get("name", "")
+        self.Street = kwargs.get("street", "")
+        self.City = kwargs.get("city", "")
+        self.State = kwargs.get("state", "")
+        self.ZIP = kwargs.get("zip", 0)
+        self.Website = kwargs.get("website", "")
+        self.DnbHeadquartersState = kwargs.get("dnb_headquarters_state", "")
+        self.DateScanned = kwargs.get("date_scanned", None)
+        self.Flags = kwargs.get("flags", 0)
+
 
 class Lender(db.Model):
     """Lender model"""
@@ -74,6 +101,10 @@ class Lender(db.Model):
     #one to many
     equipment = db.relationship("Equipment", back_populates = "lender")
 
+    def __init__(self, **kwargs):
+        self.Name = kwargs.get("name", "")
+        self.CertificateHolderAddress = kwargs.get("certificate_holder_address", "")
+
 
 class Equipment(db.Model):
     """Equipment Model
@@ -83,7 +114,7 @@ class Equipment(db.Model):
     __tablename__ = "Equipment"
 
     ID = db.Column(db.Integer, primary_key=True, autoincrement = True)
-    AccountID = db.Column(db.Integer, db.ForeignKey("Account.ID"))
+    AccountID = db.Column(db.String, db.ForeignKey("Account.ID"))
     Year = db.Column(db.Integer)
     Make = db.Column(db.String)
     Model = db.Column(db.String)
@@ -97,10 +128,22 @@ class Equipment(db.Model):
     lender = db.relationship("Lender", back_populates = "equipment")
     vendor = db.relationship("Vendor", back_populates = "equipment")
 
+    def __init__(self, **kwargs):
+        self.AccountID = kwargs.get("account_id", "")
+        self.Year = kwargs.get("year", "")
+        self.Make = kwargs.get("make", "")
+        self.Model = kwargs.get("model", "")
+        self.SerialNumber = kwargs.get("serial_number", "")
+        self.CostPerUnit = kwargs.get("cost_per_unit", "")
+        self.VendorID = kwargs.get("vendor_id", "")
+        self.LenderID = kwargs.get("lender_id", "")
+
 class States(db.Model):
     """
     Model that maps state to Secretary of State link.
     """
+    __tablename__ = "States"
+    
     ID = db.Column(db.Integer, primary_key = True, autoincrement = True)
     State = db.Column(db.String)
     Link = db.Column(db.String)
