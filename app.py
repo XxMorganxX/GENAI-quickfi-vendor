@@ -15,7 +15,7 @@ app = Flask(__name__)
 USER = os.getenv("user")
 PASSWORD = os.getenv("password")
 HOST = os.getenv("host")
-PORT = os.getenv("post")
+PORT = os.getenv("port")
 DBNAME = os.getenv("dbname")
 
 # Construct the SQLAlchemy connection string
@@ -74,14 +74,14 @@ def update_flags(vendor_id):
 
     if "num_flags" not in body:
         return failure_response("Missing 'num_flags' in request body", 400)
-    num_flags = body["num_flags"]
+    num_flags = body.get("num_flags", -1)
     res = DB.update_flags(vendor_id, num_flags)
     if not res:
         failure_response("Vendor does not exist")
     return success_response("Flags updated successfully", 204)
 
 
-@app.route("/duediligence/")
+@app.route("/duediligence/", methods=["POST"])
 def due_diligence():
     try:
         body = json.loads(request.data)

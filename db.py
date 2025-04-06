@@ -230,13 +230,16 @@ class DatabaseDriver:
                 "Vendor.Website": vendor.Website       
         }
 
-    def update_flags(self, num_flags, vendor_id):
+    def update_flags(self, vendor_id, num_flags=-1):
         """
         Updates the number of flags for a vendor and the date the vendor was scanned
         """
         vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
         if vendor is None:
             return False
+        
+        
+        num_flags = vendor.Flags + 1
         vendor.Flags = num_flags
         vendor.DateScanned = date.today()
         self.session.commit()
