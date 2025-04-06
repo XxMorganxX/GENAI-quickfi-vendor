@@ -15,7 +15,7 @@ app = Flask(__name__)
 USER = os.getenv("user")
 PASSWORD = os.getenv("password")
 HOST = os.getenv("host")
-PORT = os.getenv("port")
+PORT = os.getenv("post")
 DBNAME = os.getenv("dbname")
 
 # Construct the SQLAlchemy connection string
@@ -34,9 +34,8 @@ try:
 except Exception as e:
     print(f"Failed to connect: {e}")
 
-
 # Direct connection to the database. Used for migrations.
-DIRECT_URL="postgresql://postgres.iwpicngrwgseirrrjhmj:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
+DIRECT_URL = f"postgresql://postgres.iwpicngrwgseirrrjhmj:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
 
 # Configure database URI
 # ** Supabase Sample data URL**
@@ -45,7 +44,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Initialize SQLAlchemy with the Flask app
 db.init_db(app)
-
 
 DB = db.DatabaseDriver()
 
@@ -68,24 +66,51 @@ def get_account(account_id):
 
 
 @app.route("/vendor/<int:vendor_id>/", methods=["PATCH"])
-def update_flags(vendor_id, num_flags):
+def update_flags(vendor_id):
+    try:
+        body = json.loads(request.data)
+    except json.JSONDecodeError:
+        return failure_response("Invalid JSON", 400)
+
+    if "num_flags" not in body:
+        return failure_response("Missing 'num_flags' in request body", 400)
+    num_flags = body["num_flags"]
     res = DB.update_flags(vendor_id, num_flags)
     if not res:
         failure_response("Vendor does not exist")
     return success_response("Flags updated successfully", 204)
 
 
-"""
-Task 2: Enter state name with no spaces. Returns corresponding secretary of state links. 
-"""
-  
+@app.route("/duediligence/")
+def due_diligence():
+    try:
+        body = json.loads(request.data)
+    except json.JSONDecodeError:
+        return failure_response("Invalid JSON", 400)
+
+    if "account_id" not in body:
+        return failure_response("Missing 'account_id' in request body", 400)
+    if "vendor_id" not in body:
+        return failure_response("Missing 'vendor_id' in request body", 400)
+    account_id = body["account_id"]
+    vendor_id = body["vendor_id"]
+    res = DB.due_diligence_check(account_id, vendor_id)
+    if not res:
+        failure_response("Something went wrong", 404)
+    return success_response(res, 200)
+
+
 @app.route("/secofstate/<string:state_name>/", methods=["GET"])
 def secretary_of_state_link(state_name):
+    """
+    Task 2: Enter state name with no spaces. Returns corresponding secretary of state links.
+    """
     with app.app_context():
         res = DB.get_state_link(state_name.lower())
         if res is None:
             return failure_response("State not found")
-        return success_response({"state":state_name, "url":res}, 200)
+        return success_response({"state": state_name, "url": res}, 200)
+
 
 def main():
     app.run(host="0.0.0.0", port=8000, debug=True)
