@@ -85,7 +85,7 @@ def secretary_of_state_link(state_name):
         res = DB.get_state_link(state_name.lower())
         if res is None:
             return failure_response("State not found")
-        return success_response({"link":res}, 200)
+        return success_response({"state":state_name, "url":res}, 200)
 
 def main():
     app.run(host="0.0.0.0", port=8000, debug=True)

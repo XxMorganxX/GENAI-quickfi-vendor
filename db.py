@@ -2,18 +2,28 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from flask import Flask
+from datetime import date
+from sqlalchemy import create_engine
+# from sqlalchemy.pool import NullPool
+import os
+import csv
 
-# Create the Flask application
-app = Flask(__name__)
-
-# Configure database URI
-# ** TEMPORARY URL**
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///quickfi.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-# Initialize SQLAlchemy with the Flask app
+# Initialize SQLAlchemy 
 db = SQLAlchemy()
-db.init_app(app)
+
+def load_states_table(app):
+    """Populates the States table with states and corresponding
+    secretary of state link"""
+    with app.app_context():
+        with open('secretary_of_state_lookup.csv', newline = '') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                state = row['state'].replace(" ", "").lower()
+                link = row['url'].strip()
+                new_state = States(state, link)
+                db.session.add(new_state)
+        db.session.commit()
+
 
 class Account(db.Model):
     """Account model
@@ -47,6 +57,9 @@ class Vendor(db.Model):
     ZIP = db.Column(db.Integer)
     Website = db.Column(db.String)
     DnbHeadquartersState = db.Column(db.String)
+    DateScanned = db.Column(db.Date)
+    Flags = db.Column(db.Integer)
+
 
     #one to many
     equipment = db.relationship("Equipment", back_populates = "vendor")
@@ -84,14 +97,26 @@ class Equipment(db.Model):
     lender = db.relationship("Lender", back_populates = "equipment")
     vendor = db.relationship("Vendor", back_populates = "equipment")
 
+class States(db.Model):
+    """
+    Model that maps state to Secretary of State link.
+    """
+    ID = db.Column(db.Integer, primary_key = True, autoincrement = True)
+    State = db.Column(db.String)
+    Link = db.Column(db.String)
+
+    def __init__(self, state, link):
+        self.State = state
+        self.Link = link
+
+
 # Move table creation into a function that can be called with app context
-def init_db():
+def init_db(app):
+    db.init_app(app)
     with app.app_context():
         db.create_all()
+        load_states_table(app)
 
-# Create tables when this module is run directly
-if __name__ == "__main__":
-    init_db()
 
 class DatabaseDriver:
     """
@@ -129,7 +154,7 @@ class DatabaseDriver:
                 "InsuranceCoordinator": account.InsuranceCoordinator
             }
         return None
-    
+        
 
     def get_equipment_by_account_id(self, account_id):
         """
@@ -151,8 +176,8 @@ class DatabaseDriver:
         """
         Returns the data needed to run due diligence checks
         """
-        account = self.session.query(Account).filter(Account.ID.equals(account_id)).first()
-        vendor = self.session.query(Vendor).filter(Vendor.ID.equals(vendor_id)).first()
+        account = self.session.query(Account).filter(Account.ID==account_id).first()
+        vendor = self.session.query(Vendor).filter(Vendor.ID==vendor_id).first()
         if account:
             return {
                 "Account.Name": account.Name,
@@ -161,3 +186,28 @@ class DatabaseDriver:
                 "Vendor.Address": f"{vendor.Street}, {vendor.City}, {vendor.State}, {vendor.ZIP}",
                 "Vendor.Website": vendor.Website       
         }
+
+    def update_flags(self, num_flags, vendor_id):
+        """
+        Updates the number of flags for a vendor and the date the vendor was scanned
+        """
+        vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
+        if vendor is None:
+            return False
+        vendor.Flags = num_flags
+        vendor.DateScanned = date.today()
+        self.session.commit()
+        return True
+
+    def get_state_link(self, state_name):
+        """
+        Returns the associated Secretary of State link for the given state
+        """
+        state = self.session.query(States).filter(States.State == state_name).first()
+        if state is None:
+            return None
+        return state.Link
+
+
+
+
