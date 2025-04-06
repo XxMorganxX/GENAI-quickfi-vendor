@@ -1,9 +1,11 @@
 import json
 from flask import Flask, request
 import db
+from db import Account, Vendor, Lender, Equipment
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 import os
+from supabase import create_client, Client
 
 # Load environment variables from .env
 load_dotenv()
@@ -17,6 +19,8 @@ PASSWORD = os.getenv("password")
 HOST = os.getenv("host")
 PORT = os.getenv("port")
 DBNAME = os.getenv("dbname")
+PROJECTURL = os.getenv("projecturl")
+ANONKEY = os.getenv("anonkey")
 
 # Construct the SQLAlchemy connection string
 DATABASE_URL = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}?sslmode=require"
@@ -47,6 +51,39 @@ db.init_db(app)
 
 DB = db.DatabaseDriver()
 
+supabase: Client = create_client(PROJECTURL, ANONKEY)
+
+#next two methods copy data over from supabase
+def copy_account():
+    """Copies Account table from supabase
+    """
+    response = supabase.table("Account").select('*').execute()
+    data = response.data 
+    with app.app_context():
+        for item in data:
+            row = Account(ID = item['ID'], Name = item['Name'], Street = item['Street'], 
+                          City = item['City'], State = item['State'], ZIP = item['ZIP'], LiabilityEmail = item['LiabilityEmail'], 
+                          PropertyEmail = item['PropertyEmail'], LiabilityExpirationDate = item['LiabilityExpirationDate'], 
+                          PropertyExpirationDate = item['PropertyExpirationDate'], InsuranceCoordinator = item['InsuranceCoordinator'], 
+                          InsuranceFolderID = item['InsuranceFolderID'])
+            DB.session.add(row)
+        DB.session.commit()
+
+def copy_vendor():
+    """Copies Vendor table from Supabase
+    """
+    response = supabase.table("Vendor").select('*').execute()
+    data = response.data 
+    with app.app_context():
+        for item in data:
+            row = Vendor(ID = item['ID'], Name = item['Name'], Street = item['Street'], 
+                          City = item['City'], 
+                          State = ['State'], ZIP = item['ZIP'], Webste = item['Website'], 
+                          DnbHeadquartersState = item['DnbHeadquartersState'], DateScanned = item['DateScanned'], 
+                          Flags = item['Flags'])
+            DB.session.add(row)
+        DB.session.commit()   
+
 
 def success_response(body, code):
     return json.dumps(body), code
@@ -56,7 +93,8 @@ def failure_response(message, code=404):
     return json.dumps({"error": message}), code
 
 
-@app.route("/account/<int:account_id>/", methods=["GET"])
+#Endpoints from this point forward
+@app.route("/account/<string:account_id>/", methods=["GET"])
 def get_account(account_id):
     account = DB.get_account_by_id(account_id)
     if account is None:
@@ -65,7 +103,7 @@ def get_account(account_id):
     return success_response(account, 200)
 
 
-@app.route("/vendor/<int:vendor_id>/", methods=["PATCH"])
+@app.route("/vendorflags/<string:vendor_id>/", methods=["PATCH"])
 def update_flags(vendor_id):
     try:
         body = json.loads(request.data)
@@ -74,11 +112,25 @@ def update_flags(vendor_id):
 
     if "num_flags" not in body:
         return failure_response("Missing 'num_flags' in request body", 400)
-    num_flags = body.get("num_flags", -1)
+    num_flags = body.get("num_flags")
     res = DB.update_flags(vendor_id, num_flags)
     if not res:
-        failure_response("Vendor does not exist")
+        return failure_response("Vendor does not exist")
     return success_response("Flags updated successfully", 204)
+
+@app.route("/vendorflags/<string:vendor_id>/", methods=["GET"])
+def num_flags(vendor_id):
+    res = DB.num_flags(vendor_id)
+    if res == -1:
+        return failure_response("Vendor does not exist")
+    return success_response({"num_flags": res}, 200)
+
+@app.route("/vendor/<string:vendor_id>/", methods=["GET"])
+def get_vendor(vendor_id):
+    vendor = DB.get_vendor_by_id(vendor_id)
+    if vendor is None:
+        return failure_response("Vendor does not exist")
+    return success_response(vendor, 200)
 
 
 @app.route("/duediligence/", methods=["POST"])
@@ -114,6 +166,8 @@ def secretary_of_state_link(state_name):
 
 def main():
     app.run(host="0.0.0.0", port=8000, debug=True)
+    copy_account()
+    copy_vendor()
 
 
 if __name__ == "__main__":

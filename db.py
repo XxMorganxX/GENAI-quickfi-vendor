@@ -1,10 +1,12 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from flask import Flask
 from datetime import date
 from sqlalchemy import create_engine
 # from sqlalchemy.pool import NullPool
+from supabase import create_client, Client
+from sqlalchemy.dialects.postgresql import ARRAY
 import os
 import csv
 
@@ -25,6 +27,7 @@ def load_states_table(app):
         db.session.commit()
 
 
+#definitions for table models
 class Account(db.Model):
     """Account model
     Has a one-to-many relationshp with Equipment table"""
@@ -38,7 +41,7 @@ class Account(db.Model):
     ZIP = db.Column(db.Integer)
     LiabilityEmail = db.Column(db.String)
     PropertyEmail = db.Column(db.String)
-    InsuranceFolderID = db.Column(db.Integer)
+    InsuranceFolderID = db.Column(db.BigInteger)
     LiabilityExpirationDate = db.Column(db.String)
     PropertyExpirationDate = db.Column(db.Date)
     InsuranceCoordinator = db.Column(db.String)
@@ -47,20 +50,18 @@ class Account(db.Model):
     equipment = db.relationship("Equipment", back_populates = "account")
 
     def __init__(self, **kwargs):
-        self.Name = kwargs.get("name", "")
-        self.Street = kwargs.get("street", "")
-        self.City = kwargs.get("city", "")
-        self.State = kwargs.get("state", "")
-        self.ZIP = kwargs.get("zip", 0)
-        self.LiabilityEmail = kwargs.get("liability_email", "")
-        self.PropertyEmail = kwargs.get("property_email", "")
-        self.InsuranceFolderID = kwargs.get("insurance_folder_id", "")
-        self.LiabilityExpirationDate = kwargs.get("liability_expiration_date", "")
-        self.PropertyExpirationDate = kwargs.get("property_expiration_date", "")
-        self.InsuranceCoordinator = kwargs.get("insurance_coordinator", "")
-
-
-
+        self.ID = kwargs.get("ID", "")
+        self.Name = kwargs.get("Name", "")
+        self.Street = kwargs.get("Street", "")
+        self.City = kwargs.get("City", "")
+        self.State = kwargs.get("State", "")
+        self.ZIP = kwargs.get("ZIP", 0)
+        self.LiabilityEmail = kwargs.get("LiabilityEmail", "")
+        self.PropertyEmail = kwargs.get("PropertyEmail", "")
+        self.InsuranceFolderID = kwargs.get("InsuranceFolderID", "")
+        self.LiabilityExpirationDate = kwargs.get("LiabilityExpirationDate", "")
+        self.PropertyExpirationDate = kwargs.get("PropertyExpirationDate", "")
+        self.InsuranceCoordinator = kwargs.get("InsuranceCoordinator", "")
 
 class Vendor(db.Model):
     """Vendor model"""
@@ -70,7 +71,7 @@ class Vendor(db.Model):
     Street = db.Column(db.String)
     City = db.Column(db.String)
     State = db.Column(db.String)
-    ZIP = db.Column(db.Integer)
+    ZIP = db.Column(db.BigInteger)
     Website = db.Column(db.String)
     DnbHeadquartersState = db.Column(db.String)
     DateScanned = db.Column(db.Date)
@@ -80,15 +81,15 @@ class Vendor(db.Model):
     equipment = db.relationship("Equipment", back_populates = "vendor")
 
     def __init__(self, **kwargs):
-        self.Name = kwargs.get("name", "")
-        self.Street = kwargs.get("street", "")
-        self.City = kwargs.get("city", "")
-        self.State = kwargs.get("state", "")
-        self.ZIP = kwargs.get("zip", 0)
-        self.Website = kwargs.get("website", "")
-        self.DnbHeadquartersState = kwargs.get("dnb_headquarters_state", "")
-        self.DateScanned = kwargs.get("date_scanned", None)
-        self.Flags = kwargs.get("flags", 0)
+        self.Name = kwargs.get("Name", "")
+        self.Street = kwargs.get("Street", "")
+        self.City = kwargs.get("City", "")
+        self.State = kwargs.get("State", "")
+        self.ZIP = kwargs.get("ZIP", 0)
+        self.Website = kwargs.get("Website", "")
+        self.DnbHeadquartersState = kwargs.get("DnbHeadquartersState", "")
+        self.DateScanned = kwargs.get("DateScanned", None)
+        self.Flags = kwargs.get("Flags", "")
 
 
 class Lender(db.Model):
@@ -113,8 +114,7 @@ class Equipment(db.Model):
     Many-to-one with Account Table"""
     __tablename__ = "Equipment"
 
-    ID = db.Column(db.Integer, primary_key=True, autoincrement = True)
-    AccountID = db.Column(db.String, db.ForeignKey("Account.ID"))
+    AccountID = db.Column(db.String, db.ForeignKey("Account.ID"), primary_key = True)
     Year = db.Column(db.Integer)
     Make = db.Column(db.String)
     Model = db.Column(db.String)
@@ -215,6 +215,7 @@ class DatabaseDriver:
             for equipment in equipment_records
         ]
     
+
     def due_diligence_check(self, account_id, vendor_id):
         """
         Returns the data needed to run due diligence checks
@@ -230,7 +231,8 @@ class DatabaseDriver:
                 "Vendor.Website": vendor.Website       
         }
 
-    def update_flags(self, vendor_id, num_flags=-1):
+
+    def update_flags(self, vendor_id, num_flags):
         """
         Updates the number of flags for a vendor and the date the vendor was scanned
         """
@@ -238,12 +240,21 @@ class DatabaseDriver:
         if vendor is None:
             return False
         
-        
-        num_flags = vendor.Flags + 1
-        vendor.Flags = num_flags
+        vendor.Flags += num_flags
         vendor.DateScanned = date.today()
         self.session.commit()
         return True
+    
+
+    def num_flags(self, vendor_id):
+        """
+        Returns number of flags a vendor has.
+        """
+        vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
+        if vendor is None:
+            return -1
+        return vendor.Flags
+
 
     def get_state_link(self, state_name):
         """
@@ -253,7 +264,19 @@ class DatabaseDriver:
         if state is None:
             return None
         return state.Link
-
-
-
-
+    
+    def get_vendor_by_id(self, vendor_id):
+        """Returns information for specified Vendor.
+        """
+        vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
+        if vendor is None:
+            return False
+        
+        return {
+            "Vendor.Name": vendor.Name,
+            "Vendor.Address": f"{vendor.Street}, {vendor.City}, {vendor.State}, {vendor.ZIP}",
+            "Vendor.Website": vendor.Website,
+            "Vendor.DnbHeadquartersState": vendor.DnbHeadquartersState,
+            "Vendor.DateScanned": vendor.DateScanned,
+            "Vendor.Flags": vendor.Flags
+        }
