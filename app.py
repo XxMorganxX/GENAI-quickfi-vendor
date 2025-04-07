@@ -53,36 +53,38 @@ DB = db.DatabaseDriver()
 
 supabase: Client = create_client(PROJECTURL, ANONKEY)
 
-#next two methods copy data over from supabase
+
+# next two methods copy data over from supabase
 def copy_account():
     """Copies Account table from supabase
     """
     response = supabase.table("Account").select('*').execute()
-    data = response.data 
+    data = response.data
     with app.app_context():
         for item in data:
-            row = Account(ID = item['ID'], Name = item['Name'], Street = item['Street'], 
-                          City = item['City'], State = item['State'], ZIP = item['ZIP'], LiabilityEmail = item['LiabilityEmail'], 
-                          PropertyEmail = item['PropertyEmail'], LiabilityExpirationDate = item['LiabilityExpirationDate'], 
-                          PropertyExpirationDate = item['PropertyExpirationDate'], InsuranceCoordinator = item['InsuranceCoordinator'], 
-                          InsuranceFolderID = item['InsuranceFolderID'])
+            row = Account(ID=item['ID'], Name=item['Name'], Street=item['Street'],
+                          City=item['City'], State=item['State'], ZIP=item['ZIP'], LiabilityEmail=item['LiabilityEmail'],
+                          PropertyEmail=item['PropertyEmail'], LiabilityExpirationDate=item['LiabilityExpirationDate'],
+                          PropertyExpirationDate=item['PropertyExpirationDate'], InsuranceCoordinator=item['InsuranceCoordinator'],
+                          InsuranceFolderID=item['InsuranceFolderID'])
             DB.session.add(row)
         DB.session.commit()
+
 
 def copy_vendor():
     """Copies Vendor table from Supabase
     """
     response = supabase.table("Vendor").select('*').execute()
-    data = response.data 
+    data = response.data
     with app.app_context():
         for item in data:
-            row = Vendor(ID = item['ID'], Name = item['Name'], Street = item['Street'], 
-                          City = item['City'], 
-                          State = ['State'], ZIP = item['ZIP'], Webste = item['Website'], 
-                          DnbHeadquartersState = item['DnbHeadquartersState'], DateScanned = item['DateScanned'], 
-                          Flags = item['Flags'])
+            row = Vendor(ID=item['ID'], Name=item['Name'], Street=item['Street'],
+                         City=item['City'],
+                         State=['State'], ZIP=item['ZIP'], Webste=item['Website'],
+                         DnbHeadquartersState=item['DnbHeadquartersState'], DateScanned=item['DateScanned'],
+                         Flags=item['Flags'])
             DB.session.add(row)
-        DB.session.commit()   
+        DB.session.commit()
 
 
 def success_response(body, code):
@@ -93,7 +95,13 @@ def failure_response(message, code=404):
     return json.dumps({"error": message}), code
 
 
-#Endpoints from this point forward
+# Endpoints from this point forward
+@app.route("/account/")
+def get_accounts():
+    accounts = DB.get_accounts()
+    return success_response({"accounts": accounts}, 200)
+
+
 @app.route("/account/<string:account_id>/", methods=["GET"])
 def get_account(account_id):
     account = DB.get_account_by_id(account_id)
@@ -118,12 +126,20 @@ def update_flags(vendor_id):
         return failure_response("Vendor does not exist")
     return success_response("Flags updated successfully", 204)
 
+
 @app.route("/vendorflags/<string:vendor_id>/", methods=["GET"])
 def num_flags(vendor_id):
     res = DB.num_flags(vendor_id)
     if res == -1:
         return failure_response("Vendor does not exist")
     return success_response({"num_flags": res}, 200)
+
+
+@app.route("/vendor/")
+def get_vendors():
+    vendors = DB.get_vendors()
+    return success_response({"vendors": vendors}, 200)
+
 
 @app.route("/vendor/<string:vendor_id>/", methods=["GET"])
 def get_vendor(vendor_id):
