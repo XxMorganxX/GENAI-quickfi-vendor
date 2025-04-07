@@ -13,12 +13,11 @@ import csv
 # Initialize SQLAlchemy 
 db = SQLAlchemy()
 
-
 def load_states_table(app):
     """Populates the States table with states and corresponding
     secretary of state link"""
     with app.app_context():
-        with open('secretary_of_state_lookup.csv', newline='') as file:
+        with open('secretary_of_state_lookup.csv', newline = '') as file:
             reader = csv.DictReader(file)
             for row in reader:
                 state = row['state'].replace(" ", "").lower()
@@ -28,13 +27,13 @@ def load_states_table(app):
         db.session.commit()
 
 
-# definitions for table models
+#definitions for table models
 class Account(db.Model):
     """Account model
     Has a one-to-many relationshp with Equipment table"""
     __tablename__ = "Account"
 
-    ID = db.Column(db.String, primary_key=True, nullable=False)
+    ID = db.Column(db.String, primary_key=True, nullable = False)
     Name = db.Column(db.String)
     Street = db.Column(db.String)
     City = db.Column(db.String)
@@ -47,8 +46,8 @@ class Account(db.Model):
     PropertyExpirationDate = db.Column(db.Date)
     InsuranceCoordinator = db.Column(db.String)
 
-    # one to many
-    equipment = db.relationship("Equipment", back_populates="account")
+    #one to many
+    equipment = db.relationship("Equipment", back_populates = "account")
 
     def __init__(self, **kwargs):
         self.ID = kwargs.get("ID", "")
@@ -64,11 +63,10 @@ class Account(db.Model):
         self.PropertyExpirationDate = kwargs.get("PropertyExpirationDate", "")
         self.InsuranceCoordinator = kwargs.get("InsuranceCoordinator", "")
 
-
 class Vendor(db.Model):
     """Vendor model"""
     __tablename__ = "Vendor"
-    ID = db.Column(db.String, primary_key=True, nullable=False)
+    ID = db.Column(db.String, primary_key=True, nullable = False)
     Name = db.Column(db.String)
     Street = db.Column(db.String)
     City = db.Column(db.String)
@@ -78,9 +76,10 @@ class Vendor(db.Model):
     DnbHeadquartersState = db.Column(db.String)
     DateScanned = db.Column(db.Date)
     Flags = db.Column(db.Integer)
+    FlagsAdded = db.Column(ARRAY(db.String))
 
-    # one to many
-    equipment = db.relationship("Equipment", back_populates="vendor")
+    #one to many
+    equipment = db.relationship("Equipment", back_populates = "vendor")
 
     def __init__(self, **kwargs):
         self.Name = kwargs.get("Name", "")
@@ -92,17 +91,19 @@ class Vendor(db.Model):
         self.DnbHeadquartersState = kwargs.get("DnbHeadquartersState", "")
         self.DateScanned = kwargs.get("DateScanned", None)
         self.Flags = kwargs.get("Flags", "")
+        self.FlagsAdded = kwargs.get("FlagsAdded", [])
+
 
 
 class Lender(db.Model):
     """Lender model"""
     __tablename__ = "Lender"
-    ID = db.Column(db.String, primary_key=True, nullable=False)
+    ID = db.Column(db.String, primary_key=True, nullable = False)
     Name = db.Column(db.String)
     CertificateHolderAddress = db.Column(db.String)
 
-    # one to many
-    equipment = db.relationship("Equipment", back_populates="lender")
+    #one to many
+    equipment = db.relationship("Equipment", back_populates = "lender")
 
     def __init__(self, **kwargs):
         self.Name = kwargs.get("name", "")
@@ -116,7 +117,7 @@ class Equipment(db.Model):
     Many-to-one with Account Table"""
     __tablename__ = "Equipment"
 
-    AccountID = db.Column(db.String, db.ForeignKey("Account.ID"), primary_key=True)
+    AccountID = db.Column(db.String, db.ForeignKey("Account.ID"), primary_key = True)
     Year = db.Column(db.Integer)
     Make = db.Column(db.String)
     Model = db.Column(db.String)
@@ -125,10 +126,10 @@ class Equipment(db.Model):
     VendorID = db.Column(db.String, db.ForeignKey("Vendor.ID"))
     LenderID = db.Column(db.String, db.ForeignKey("Lender.ID"))
 
-    # relationships for easier access
-    account = db.relationship("Account", back_populates="equipment")
-    lender = db.relationship("Lender", back_populates="equipment")
-    vendor = db.relationship("Vendor", back_populates="equipment")
+    #relationships for easier access
+    account = db.relationship("Account", back_populates = "equipment")
+    lender = db.relationship("Lender", back_populates = "equipment")
+    vendor = db.relationship("Vendor", back_populates = "equipment")
 
     def __init__(self, **kwargs):
         self.AccountID = kwargs.get("account_id", "")
@@ -140,14 +141,13 @@ class Equipment(db.Model):
         self.VendorID = kwargs.get("vendor_id", "")
         self.LenderID = kwargs.get("lender_id", "")
 
-
 class States(db.Model):
     """
     Model that maps state to Secretary of State link.
     """
     __tablename__ = "States"
-
-    ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    
+    ID = db.Column(db.Integer, primary_key = True, autoincrement = True)
     State = db.Column(db.String)
     Link = db.Column(db.String)
 
@@ -169,7 +169,6 @@ class DatabaseDriver:
     Database driver using Flask-SQLAlchemy
     Handles reading and writing information with database
     """
-
     def __init__(self):
         """
         Creates session
@@ -191,6 +190,7 @@ class DatabaseDriver:
                 "InsuranceCoordinator": account.InsuranceCoordinator
             })
         return result
+    
 
     def get_account_by_id(self, account_id):
         """
@@ -199,23 +199,24 @@ class DatabaseDriver:
         account = self.session.query(Account).filter(Account.ID == account_id).first()
         if account:
             LenderName = None
-            if account.equipment:
-                for equipment in account.equipment:
-                    if equipment.lender:
-                        LenderName = equipment.lender.Name
+            if account.equipment: 
+                for equipment in account.equipment: 
+                    if equipment.lender: 
+                        LenderName = equipment.lender.Name 
                         break
             return {
                 "Account.Name": account.Name,
                 "Account.Address": f"{account.Street}, {account.City}, {account.State}, {account.ZIP}",
                 "LiabilityEmail": account.LiabilityEmail,
                 "PropertyEmail": account.PropertyEmail,
-                "Lender.Name": LenderName,
+                "Lender.Name": LenderName, 
                 "InsuranceFolderID": account.InsuranceFolderID,
                 "LiabilityExpirationDate": account.LiabilityExpirationDate,
                 "PropertyExpirationDate": account.PropertyExpirationDate,
                 "InsuranceCoordinator": account.InsuranceCoordinator
             }
         return None
+        
 
     def get_equipment_by_account_id(self, account_id):
         """
@@ -232,43 +233,53 @@ class DatabaseDriver:
             }
             for equipment in equipment_records
         ]
+    
 
     def due_diligence_check(self, account_id, vendor_id):
         """
         Returns the data needed to run due diligence checks
         """
-        account = self.session.query(Account).filter(Account.ID == account_id).first()
-        vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
+        account = self.session.query(Account).filter(Account.ID==account_id).first()
+        vendor = self.session.query(Vendor).filter(Vendor.ID==vendor_id).first()
         if account:
             return {
                 "Account.Name": account.Name,
                 "Account.Address": f"{account.Street}, {account.City}, {account.State}, {account.ZIP}",
                 "Vendor.Name": vendor.Name,
                 "Vendor.Address": f"{vendor.Street}, {vendor.City}, {vendor.State}, {vendor.ZIP}",
-                "Vendor.Website": vendor.Website
-            }
+                "Vendor.Website": vendor.Website       
+        }
 
-    def update_flags(self, vendor_id, num_flags):
+
+    def update_flags(self, vendor_id, flag):
         """
         Updates the number of flags for a vendor and the date the vendor was scanned
         """
         vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
         if vendor is None:
             return False
-
-        vendor.Flags += num_flags
+        
+        vendor.FlagsAdded = vendor.FlagsAdded + [flag] if vendor.FlagsAdded else [flag]
+        vendor.Flags += 1
         vendor.DateScanned = date.today()
         self.session.commit()
         return True
+    
 
-    def num_flags(self, vendor_id):
+    def get_flags(self, vendor_id):
         """
-        Returns number of flags a vendor has.
+        Returns flags a vendor has.
         """
         vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
         if vendor is None:
             return -1
-        return vendor.Flags
+        
+        flags = []
+        for flag in vendor.FlagsAdded:
+            flags.append(flag)
+
+        return flags
+
 
     def get_state_link(self, state_name):
         """
@@ -278,7 +289,7 @@ class DatabaseDriver:
         if state is None:
             return None
         return state.Link
-
+    
     def get_vendors(self):
         vendors = self.session.query(Vendor)
         result = []
@@ -292,6 +303,7 @@ class DatabaseDriver:
                 "Vendor.Flags": vendor.Flags
             })
         return result
+    
 
     def get_vendor_by_id(self, vendor_id):
         """Returns information for specified Vendor.
@@ -299,12 +311,13 @@ class DatabaseDriver:
         vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
         if vendor is None:
             return False
-
+        
         return {
             "Vendor.Name": vendor.Name,
             "Vendor.Address": f"{vendor.Street}, {vendor.City}, {vendor.State}, {vendor.ZIP}",
             "Vendor.Website": vendor.Website,
             "Vendor.DnbHeadquartersState": vendor.DnbHeadquartersState,
             "Vendor.DateScanned": vendor.DateScanned,
-            "Vendor.Flags": vendor.Flags
+            "Vendor.Flags": vendor.Flags,
+            "Vendor.FlagsAdded": self.get_flags(vendor_id)
         }

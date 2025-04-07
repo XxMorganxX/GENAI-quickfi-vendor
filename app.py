@@ -53,38 +53,36 @@ DB = db.DatabaseDriver()
 
 supabase: Client = create_client(PROJECTURL, ANONKEY)
 
-
-# next two methods copy data over from supabase
+#next two methods copy data over from supabase
 def copy_account():
     """Copies Account table from supabase
     """
     response = supabase.table("Account").select('*').execute()
-    data = response.data
+    data = response.data 
     with app.app_context():
         for item in data:
-            row = Account(ID=item['ID'], Name=item['Name'], Street=item['Street'],
-                          City=item['City'], State=item['State'], ZIP=item['ZIP'], LiabilityEmail=item['LiabilityEmail'],
-                          PropertyEmail=item['PropertyEmail'], LiabilityExpirationDate=item['LiabilityExpirationDate'],
-                          PropertyExpirationDate=item['PropertyExpirationDate'], InsuranceCoordinator=item['InsuranceCoordinator'],
-                          InsuranceFolderID=item['InsuranceFolderID'])
+            row = Account(ID = item['ID'], Name = item['Name'], Street = item['Street'], 
+                          City = item['City'], State = item['State'], ZIP = item['ZIP'], LiabilityEmail = item['LiabilityEmail'], 
+                          PropertyEmail = item['PropertyEmail'], LiabilityExpirationDate = item['LiabilityExpirationDate'], 
+                          PropertyExpirationDate = item['PropertyExpirationDate'], InsuranceCoordinator = item['InsuranceCoordinator'], 
+                          InsuranceFolderID = item['InsuranceFolderID'])
             DB.session.add(row)
         DB.session.commit()
-
 
 def copy_vendor():
     """Copies Vendor table from Supabase
     """
     response = supabase.table("Vendor").select('*').execute()
-    data = response.data
+    data = response.data 
     with app.app_context():
         for item in data:
-            row = Vendor(ID=item['ID'], Name=item['Name'], Street=item['Street'],
-                         City=item['City'],
-                         State=['State'], ZIP=item['ZIP'], Webste=item['Website'],
-                         DnbHeadquartersState=item['DnbHeadquartersState'], DateScanned=item['DateScanned'],
-                         Flags=item['Flags'])
+            row = Vendor(ID = item['ID'], Name = item['Name'], Street = item['Street'], 
+                          City = item['City'], 
+                          State = ['State'], ZIP = item['ZIP'], Webste = item['Website'], 
+                          DnbHeadquartersState = item['DnbHeadquartersState'], DateScanned = item['DateScanned'], 
+                          Flags = item['Flags'])
             DB.session.add(row)
-        DB.session.commit()
+        DB.session.commit()   
 
 
 def success_response(body, code):
@@ -95,7 +93,8 @@ def failure_response(message, code=404):
     return json.dumps({"error": message}), code
 
 
-# Endpoints from this point forward
+#Endpoints from this point forward
+
 @app.route("/account/")
 def get_accounts():
     accounts = DB.get_accounts()
@@ -113,26 +112,29 @@ def get_account(account_id):
 
 @app.route("/vendorflags/<string:vendor_id>/", methods=["PATCH"])
 def update_flags(vendor_id):
+    """Include json with flag name {"flag": ___ }"""
     try:
         body = json.loads(request.data)
     except json.JSONDecodeError:
         return failure_response("Invalid JSON", 400)
 
-    if "num_flags" not in body:
-        return failure_response("Missing 'num_flags' in request body", 400)
-    num_flags = body.get("num_flags")
-    res = DB.update_flags(vendor_id, num_flags)
+    if "flag" not in body:
+        return failure_response("Missing 'flag' in request body", 400)
+    flag = body.get("flag")
+    res = DB.update_flags(vendor_id, flag)
     if not res:
         return failure_response("Vendor does not exist")
     return success_response("Flags updated successfully", 204)
 
 
 @app.route("/vendorflags/<string:vendor_id>/", methods=["GET"])
-def num_flags(vendor_id):
-    res = DB.num_flags(vendor_id)
-    if res == -1:
+def get_flags(vendor_id):
+    """Returns number of flags and names of flags that were added"""
+    res = DB.get_vendor_by_id(vendor_id)
+
+    if res is None:
         return failure_response("Vendor does not exist")
-    return success_response({"num_flags": res}, 200)
+    return success_response({"Vendor.Flags":res.get("Vendor.Flags"), "Vendor.FlagsAdded": res.get("Vendor.FlagsAdded")}, 200)
 
 
 @app.route("/vendor/")
@@ -143,6 +145,7 @@ def get_vendors():
 
 @app.route("/vendor/<string:vendor_id>/", methods=["GET"])
 def get_vendor(vendor_id):
+    """Returns all vendor information"""
     vendor = DB.get_vendor_by_id(vendor_id)
     if vendor is None:
         return failure_response("Vendor does not exist")
@@ -151,6 +154,7 @@ def get_vendor(vendor_id):
 
 @app.route("/duediligence/", methods=["POST"])
 def due_diligence():
+    """Returns all information for due diligence check"""
     try:
         body = json.loads(request.data)
     except json.JSONDecodeError:
