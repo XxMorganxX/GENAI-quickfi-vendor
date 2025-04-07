@@ -444,7 +444,7 @@ def google_search_validation(vendor_name, vendor_address):
                 flags.append("Address listed on website does not match vendor address")
         return flags
     except Exception as e:
-        raise RuntimeError("Failed to call Perplexity API.")
+        raise RuntimeError(f"Failed to Google search for vendor {vendor_name}.")
 
 def google_maps_validation(vendor_address):
     """
@@ -548,6 +548,68 @@ def task_five(vendor_id):
         "flags": address_website_flags + maps_flags,
         "num_flags": num_flags
     }
+
+def task_six(vendor_id):
+    """
+    Use Perplexity to search for adverse news associated with a vendor.
+    Performs a Google search using the vendor's name and flag if any results
+    suggest legal trouble, bankruptcy, fraud, or negative media.
+
+    Args:
+        vendor_id (str): Identifier of the vendor
+
+    Returns:
+        dict:
+            {
+                "flags": List of flag messages that were raised
+                "num_flags": Integer count of flags raised
+            }
+    """
+    # Get vendor name
+    vendor_info = db_driver.get_vendor_by_id(vendor_id)
+    if not vendor_info:
+        raise ValueError(f"Vendor ID '{vendor_id}' not found")
+    vendor_name = vendor_info["Vendor.Name"]
+
+    # Create a prompt to search for adverse news associated with the vendor
+    keywords = ["fraud", "lawsuit", "shutdown", "bankruptcy", "charges", "scam", "indictment", "settlement", "scandal"]
+    prompt = f"""
+        Google search for news about '{vendor_name}' combined with any of the following terms: {', '.join(keywords)}.
+
+        Check the top 5 results of each search.
+
+        Check if any of the results mention the vendor being involved in:
+        - Fraud
+        - Lawsuits or legal disputes
+        - Bankruptcy or shutdown
+        - Government charges or fines
+        - Negative media exposure or public scandal
+
+        Return a JSON object in the following format:
+        {{
+          "adverse_findings": true/false,
+          "flag_reasons": ["List of short descriptions of adverse finding such as 'Bankruptcy filing in 2020' or 'Lawsuit from partner'"]
+        }}
+    """
+    try:
+        # Call Perplexity on the prompt
+        perplexity_response = call_perplexity_api(prompt)
+        response = json.loads(perplexity_response)
+
+        # Raise flags
+        if not response["adverse_findings"]:
+            return {"flags": [], "num_flags": 0}
+        num_flags = len(response["flag_reasons"])
+        result = requests.patch(f"{API_BASE_URL}/vendorflags/{vendor_id}/", json={"num_flags": num_flags})
+        if result.status_code != 204:
+            print(f"Failed to update flags for vendor id {vendor_id}: {result.status_code}")
+
+        return {
+            "flags": response["flag_reasons"],
+            "num_flags": num_flags
+        }
+    except Exception as e:
+        raise RuntimeError(f"Failed to run adverse news search for vendor {vendor_name}.")
 
 def send_email(body, vendor_name, recipient_email=None):
     """
