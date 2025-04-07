@@ -121,6 +121,12 @@ def task_two(vendor_id):
         pass
 
 
+def task_three():
+     pass
+
+def task_four():
+     pass
+
 def send_email(body, vendor_name, recipient_email=None):
     """
     Send an email using SMTP.
