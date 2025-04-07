@@ -74,6 +74,7 @@ def task_one(account_id, vendor_id):
         
         if vendor_name == account_name or vendor_address == account_address:
             matches_found = True
+            
             # Update vendor via PATCH endpoint
             patch_endpoint = f"{DATABASE_URL}/vendor/{vendor_id}/"
             patch_payload = {  # Increment flag count
@@ -118,7 +119,7 @@ TASK TWO DOCS:
 
 """
 def task_two(vendor_id):
-        pass
+        
 
 
 def send_email(body, vendor_name, recipient_email=None):
