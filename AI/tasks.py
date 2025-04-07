@@ -14,6 +14,12 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+import json
+import csv
+from pathlib import Path
+
+import playwright
+
 
 
 """
@@ -110,7 +116,7 @@ TASK TWO DOCS:
 - **Prescreen Score**:
     - If "High Risk" → flag
 - **Headquarters Address**:
-    - Save this address as `DNBaddress` to determine which state’s Secretary of State website to use in the next step
+    - Save this address as `DNBaddress` to determine which state's Secretary of State website to use in the next step
 
 **Data Used Later**:
 
@@ -121,8 +127,263 @@ def task_two(vendor_id):
         pass
 
 
+
+
+
+
+
+"""
+Task 3 Docs:
+**What AI does**:
+
+- Looks up the vendor in their state's official business registry using the `DNBaddress.state`
+
+**Where it connects to**:
+
+- Public Secretary of State websites (listed in SOS lookup table)
+    - e.g., for California: https://bizfileonline.sos.ca.gov/search/business
+
+**Steps**:
+
+1. Use `GET /states/secretary-of-state-urls` to get the right URL
+2. Search vendor by name
+3. Scrape or read results
+
+**What AI checks**:
+
+- **Years in Business**:
+    - If < 5 years → flag
+- **Business Status**:
+    - If status ≠ "Active" → flag
+- **If vendor is not found at all** → flag
+"""
+def call_perplexity_api(prompt):
+    """
+    Call the Perplexity API to analyze HTML content.
+    
+    Args:
+        prompt (str): Prompt to send to Perplexity
+        
+    Returns:
+        str: Perplexity's response
+    """
+    try:
+        # This is a placeholder for your actual Perplexity API call
+        # You would need to implement this based on Perplexity's API documentation
+        headers = {
+            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "prompt": prompt,
+            "model": "pplx-7b-online"  # Or whatever model is appropriate
+        }
+        
+        response = requests.post(
+            "https://api.perplexity.ai/completions",
+            headers=headers,
+            json=data
+        )
+        
+        if response.status_code == 200:
+            return response.json()["completion"]
+        else:
+            return json.dumps({
+                "found": False,
+                "registration_date": None,
+                "years_in_business": None,
+                "status": None,
+                "explanation": f"API error: {response.status_code}"
+            })
+            
+    except Exception as e:
+        return json.dumps({
+            "found": False,
+            "registration_date": None,
+            "years_in_business": None,
+            "status": None,
+            "explanation": f"Error calling Perplexity API: {str(e)}"
+        })
+    
+def get_sos_search_results(sos_url, vendor_name):
+    """
+    Navigate to a Secretary of State website and perform a search.
+
+    Args:
+        sos_url (str): URL of the Secretary of State website
+        vendor_name (str): Name of the vendor to search for
+        
+    Returns:
+        str: HTML content of the search results page
+    """
+    try:
+        # Initialize browser (headless mode)
+        browser = playwright.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        
+        # Navigate to the SOS website
+        page.goto(sos_url)
+        
+        # Take a simple approach - just find any input field and enter the vendor name
+        # This won't work for all sites but gives Perplexity something to analyze
+        input_selectors = [
+            'input[type="text"]',
+            'input[name*="name"]',
+            'input[name*="search"]',
+            'input[name*="entity"]',
+            'input[id*="name"]',
+            'input[id*="search"]',
+            'input[id*="entity"]'
+        ]
+        
+        for selector in input_selectors:
+            if page.query_selector(selector):
+                page.fill(selector, vendor_name)
+                break
+        
+        # Look for a submit button and click it
+        button_selectors = [
+            'button[type="submit"]',
+            'input[type="submit"]',
+            'button:has-text("Search")',
+            'button:has-text("Lookup")',
+            'a:has-text("Search")'
+        ]
+        
+        for selector in button_selectors:
+            if page.query_selector(selector):
+                page.click(selector)
+                break
+        
+        # Wait for results to load
+        page.wait_for_load_state("networkidle")
+        
+        # Get the HTML content
+        html_content = page.content()
+        
+        # Clean up
+        browser.close()
+        
+        return html_content
+        
+    except Exception as e:
+        print(f"Error navigating to SOS website: {str(e)}")
+        return f"<error>Failed to navigate to {sos_url}: {str(e)}</error>"
+    
+def get_state_sos_url(state):
+    """
+    Get the Secretary of State URL for a given state from the CSV file.
+    
+    Args:
+        state (str): State name in lowercase (e.g., "california")
+        
+    Returns:
+        str: URL for the state's Secretary of State website, or None if not found
+    """
+    try:
+        # Get the path to the CSV file
+        # Assuming the CSV is in the same directory as this script
+        current_dir = Path(__file__).parent.parent
+        csv_path = current_dir / "secretary_of_state_lookup.csv"
+        
+        # Read the CSV file
+        with open(csv_path, 'r') as csvfile:
+            reader = csv.DictReader(csvfile)
+            
+            # Convert state to title case for comparison (e.g., "california" -> "California")
+            state_title = state.title()
+            
+            # Search for the state in the CSV
+            for row in reader:
+                if row['state'] == state_title:
+                    return row['url']
+            
+            # If state not found
+            return None
+            
+    except Exception as e:
+        print(f"Error reading Secretary of State URL for {state}: {str(e)}")
+        return None
+
+def check_secretary_of_state(vendor_name, state):
+    """
+    Use Perplexity AI to check a vendor's status in a Secretary of State database.
+    
+    Args:
+        vendor_name (str): Name of the vendor to check
+        state (str): State abbreviation (e.g., "CA" for California)
+        
+    Returns:
+        dict: Results including found status, years in business, and active status
+    """
+    try:
+        # Get the appropriate Secretary of State URL
+        sos_url = get_state_sos_url(state.lower())
+        if not sos_url:
+            return {"error": f"No Secretary of State URL found for {state}"}
+            
+        # Use a web browser automation tool to navigate to the SOS website
+        # and perform a basic search for the vendor name
+        html_content = get_sos_search_results(sos_url, vendor_name)
+        
+        # Create a prompt for Perplexity
+        prompt = f"""
+        I need to check if the business "{vendor_name}" is registered in {state} and extract specific information.
+        
+        Based on the HTML content from the Secretary of State website, please tell me:
+        
+        1. Is the business found in the registry? (Yes/No)
+        2. The age of the business (in number of years), based on the business's registration date (MM/DD/YYYY) to today?
+        3. If the current status of the business is "Active" or something of equal meaning. Also have the status.
+        
+        Please return your answer in JSON format:
+        {{
+            "found": true/false,
+            "years_in_business": number or null,
+            "status": "status text" or null,
+            "active": true/false,
+            "explanation": "brief explanation of findings"
+        }}
+        
+        HTML content:
+        {html_content}
+        """
+        
+        # Call Perplexity API
+        perplexity_response = call_perplexity_api(prompt)
+        
+        # Parse the response (assuming Perplexity returns well-formed JSON)
+        results = json.loads(perplexity_response)
+        
+        # Determine if any flags should be set based on the criteria
+        flags = []
+        if not results["found"]:
+            flags.append("Business not found in registry")
+        elif results["years_in_business"] is not None and results["years_in_business"] < 5:
+            flags.append(f"Business operating for only {results['years_in_business']} years")
+        elif results["status"] is not None and results["active"] == False:
+            flags.append(f"Business status is '{results['status']}' instead of 'Active'")
+            
+        results["flags"] = flags
+        results["flag_count"] = len(flags)
+        
+        return results
+        
+    except Exception as e:
+        return {"error": str(e), "flags": ["Error checking Secretary of State"], "flag_count": 1}
+
+
+
 def task_three():
      pass
+
+
+
+
+
+
 
 def task_four():
      pass
