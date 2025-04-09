@@ -1,323 +1,160 @@
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine, func
-from sqlalchemy.orm import sessionmaker
-from flask import Flask
 from datetime import date
-from sqlalchemy import create_engine
-# from sqlalchemy.pool import NullPool
 from supabase import create_client, Client
 from sqlalchemy.dialects.postgresql import ARRAY
 import os
-import csv
-
-# Initialize SQLAlchemy 
-db = SQLAlchemy()
-
-def load_states_table(app):
-    """Populates the States table with states and corresponding
-    secretary of state link"""
-    with app.app_context():
-        with open('secretary_of_state_lookup.csv', newline = '') as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                state = row['state'].replace(" ", "").lower()
-                link = row['url'].strip()
-                new_state = States(state, link)
-                db.session.add(new_state)
-        db.session.commit()
+import flask
+from flask import Flask, request, jsonify
 
 
-#definitions for table models
-class Account(db.Model):
-    """Account model
-    Has a one-to-many relationshp with Equipment table"""
-    __tablename__ = "Account"
-
-    ID = db.Column(db.String, primary_key=True, nullable = False)
-    Name = db.Column(db.String)
-    Street = db.Column(db.String)
-    City = db.Column(db.String)
-    State = db.Column(db.String)
-    ZIP = db.Column(db.Integer)
-    LiabilityEmail = db.Column(db.String)
-    PropertyEmail = db.Column(db.String)
-    InsuranceFolderID = db.Column(db.BigInteger)
-    LiabilityExpirationDate = db.Column(db.String)
-    PropertyExpirationDate = db.Column(db.Date)
-    InsuranceCoordinator = db.Column(db.String)
-
-    #one to many
-    equipment = db.relationship("Equipment", back_populates = "account")
-
-    def __init__(self, **kwargs):
-        self.ID = kwargs.get("ID", "")
-        self.Name = kwargs.get("Name", "")
-        self.Street = kwargs.get("Street", "")
-        self.City = kwargs.get("City", "")
-        self.State = kwargs.get("State", "")
-        self.ZIP = kwargs.get("ZIP", 0)
-        self.LiabilityEmail = kwargs.get("LiabilityEmail", "")
-        self.PropertyEmail = kwargs.get("PropertyEmail", "")
-        self.InsuranceFolderID = kwargs.get("InsuranceFolderID", "")
-        self.LiabilityExpirationDate = kwargs.get("LiabilityExpirationDate", "")
-        self.PropertyExpirationDate = kwargs.get("PropertyExpirationDate", "")
-        self.InsuranceCoordinator = kwargs.get("InsuranceCoordinator", "")
-
-class Vendor(db.Model):
-    """Vendor model"""
-    __tablename__ = "Vendor"
-    ID = db.Column(db.String, primary_key=True, nullable = False)
-    Name = db.Column(db.String)
-    Street = db.Column(db.String)
-    City = db.Column(db.String)
-    State = db.Column(db.String)
-    ZIP = db.Column(db.BigInteger)
-    Website = db.Column(db.String)
-    DnbHeadquartersState = db.Column(db.String)
-    DateScanned = db.Column(db.Date)
-    Flags = db.Column(db.Integer)
-    FlagsAdded = db.Column(ARRAY(db.String))
-
-    #one to many
-    equipment = db.relationship("Equipment", back_populates = "vendor")
-
-    def __init__(self, **kwargs):
-        self.Name = kwargs.get("Name", "")
-        self.Street = kwargs.get("Street", "")
-        self.City = kwargs.get("City", "")
-        self.State = kwargs.get("State", "")
-        self.ZIP = kwargs.get("ZIP", 0)
-        self.Website = kwargs.get("Website", "")
-        self.DnbHeadquartersState = kwargs.get("DnbHeadquartersState", "")
-        self.DateScanned = kwargs.get("DateScanned", None)
-        self.Flags = kwargs.get("Flags", "")
-        self.FlagsAdded = kwargs.get("FlagsAdded", [])
-
-
-
-class Lender(db.Model):
-    """Lender model"""
-    __tablename__ = "Lender"
-    ID = db.Column(db.String, primary_key=True, nullable = False)
-    Name = db.Column(db.String)
-    CertificateHolderAddress = db.Column(db.String)
-
-    #one to many
-    equipment = db.relationship("Equipment", back_populates = "lender")
-
-    def __init__(self, **kwargs):
-        self.Name = kwargs.get("name", "")
-        self.CertificateHolderAddress = kwargs.get("certificate_holder_address", "")
-
-
-class Equipment(db.Model):
-    """Equipment Model
-    Many-to-one with Vendor Table
-    Many-to-one with Lender Table
-    Many-to-one with Account Table"""
-    __tablename__ = "Equipment"
-
-    AccountID = db.Column(db.String, db.ForeignKey("Account.ID"), primary_key = True)
-    Year = db.Column(db.Integer)
-    Make = db.Column(db.String)
-    Model = db.Column(db.String)
-    SerialNumber = db.Column(db.String)
-    CostPerUnit = db.Column(db.String)
-    VendorID = db.Column(db.String, db.ForeignKey("Vendor.ID"))
-    LenderID = db.Column(db.String, db.ForeignKey("Lender.ID"))
-
-    #relationships for easier access
-    account = db.relationship("Account", back_populates = "equipment")
-    lender = db.relationship("Lender", back_populates = "equipment")
-    vendor = db.relationship("Vendor", back_populates = "equipment")
-
-    def __init__(self, **kwargs):
-        self.AccountID = kwargs.get("account_id", "")
-        self.Year = kwargs.get("year", "")
-        self.Make = kwargs.get("make", "")
-        self.Model = kwargs.get("model", "")
-        self.SerialNumber = kwargs.get("serial_number", "")
-        self.CostPerUnit = kwargs.get("cost_per_unit", "")
-        self.VendorID = kwargs.get("vendor_id", "")
-        self.LenderID = kwargs.get("lender_id", "")
-
-class States(db.Model):
-    """
-    Model that maps state to Secretary of State link.
-    """
-    __tablename__ = "States"
-    
-    ID = db.Column(db.Integer, primary_key = True, autoincrement = True)
-    State = db.Column(db.String)
-    Link = db.Column(db.String)
-
-    def __init__(self, state, link):
-        self.State = state
-        self.Link = link
-
-
-# Move table creation into a function that can be called with app context
-def init_db(app):
-    db.init_app(app)
-    with app.app_context():
-        db.create_all()
-        load_states_table(app)
-
+# Initialize Supabase client
+PROJECTURL = os.getenv("projecturl")
+ANONKEY = os.getenv("anonkey")
+supabase: Client = create_client(PROJECTURL, ANONKEY)
 
 class DatabaseDriver:
     """
-    Database driver using Flask-SQLAlchemy
-    Handles reading and writing information with database
+    Database driver for interacting with Supabase.
+    Handles reading and writing information with the Supabase database.
     """
-    def __init__(self):
-        """
-        Creates session
-        """
-        self.session = db.session
 
-    def get_accounts(self):
-        accounts = self.session.query(Account)
-        result = []
-        for account in accounts:
-            result.append({
-                "ID": account.ID,
-                "Account.Address": f"{account.Street}, {account.City}, {account.State}, {account.ZIP}",
-                "LiabilityEmail": account.LiabilityEmail,
-                "PropertyEmail": account.PropertyEmail,
-                "InsuranceFolderID": account.InsuranceFolderID,
-                "LiabilityExpirationDate": str(account.LiabilityExpirationDate),
-                "PropertyExpirationDate": str(account.PropertyExpirationDate),
-                "InsuranceCoordinator": account.InsuranceCoordinator
-            })
-        return result
-    
-
-    def get_account_by_id(self, account_id):
+    def get_account_by_id(self, account_id=None):
         """
-        Returns information about an account given an account ID.
+        Fetches account information by account ID from Supabase.
         """
-        account = self.session.query(Account).filter(Account.ID == account_id).first()
-        if account:
-            LenderName = None
-            if account.equipment: 
-                for equipment in account.equipment: 
-                    if equipment.lender: 
-                        LenderName = equipment.lender.Name 
-                        break
-            return {
-                "Account.Name": account.Name,
-                "Account.Address": f"{account.Street}, {account.City}, {account.State}, {account.ZIP}",
-                "LiabilityEmail": account.LiabilityEmail,
-                "PropertyEmail": account.PropertyEmail,
-                "Lender.Name": LenderName, 
-                "InsuranceFolderID": account.InsuranceFolderID,
-                "LiabilityExpirationDate": account.LiabilityExpirationDate,
-                "PropertyExpirationDate": account.PropertyExpirationDate,
-                "InsuranceCoordinator": account.InsuranceCoordinator
-            }
-        return None
+        try:
+            print(f"Attempting to fetch account with ID: {account_id}")
+            response = supabase.table("Account").select("*").eq("ID", account_id).execute()
+            print(f"Response: {response}")
+                
+            if not response.data:
+                return None
+                
+            account = response.data[0]
+            print(f"Found account: {account}")
+            
+            try:
+                equipment_response = supabase.table("Equipment").select("*").eq("AccountID", account_id).execute()
+                if equipment_response.error:
+                    print(f"Error fetching equipment: {equipment_response.error}")
+                    account["Equipment"] = []
+                else:
+                    account["Equipment"] = equipment_response.data if equipment_response.data else []
+            except Exception as e:
+                print(f"Error fetching equipment: {str(e)}")
+                account["Equipment"] = []
+                
+            return account
+        except Exception as e:
+            print(f"Unexpected error in get_account_by_id: {str(e)}")
+            return None
         
 
     def get_equipment_by_account_id(self, account_id):
         """
-        Returns information about the equipment listed under a given account ID.
+        Fetches equipment information by account ID from Supabase.
         """
-        equipment_records = self.session.query(Equipment).filter(Equipment.AccountID == account_id).all()
-        return [
-            {
-                "Year": equipment.Year,
-                "Make": equipment.Make,
-                "Model": equipment.Model,
-                "Serial": equipment.SerialNumber,
-                "CostPerUnit": equipment.CostPerUnit
-            }
-            for equipment in equipment_records
-        ]
-    
+        response = supabase.table("Equipment").select("*").eq("AccountID", account_id).execute()
+        return response.data if response.data else []
+
 
     def due_diligence_check(self, account_id, vendor_id):
         """
-        Returns the data needed to run due diligence checks
+        Performs a due diligence check for a vendor associated with an account.
+        Returns a dictionary containing:
+        - Account information
+        - Vendor information
+        - Vendor's flags and flags added
         """
-        account = self.session.query(Account).filter(Account.ID==account_id).first()
-        vendor = self.session.query(Vendor).filter(Vendor.ID==vendor_id).first()
-        if account:
-            return {
+        try:
+            
+            # Get account information
+            account = self.get_account_by_id(account_id)
+            if not account:
+                return None
+
+            # Get vendor information
+            vendor = self.get_vendor_by_id(vendor_id)
+            if not vendor:
+                return None
+
+            result = {
                 "Account.Name": account.Name,
                 "Account.Address": f"{account.Street}, {account.City}, {account.State}, {account.ZIP}",
                 "Vendor.Name": vendor.Name,
                 "Vendor.Address": f"{vendor.Street}, {vendor.City}, {vendor.State}, {vendor.ZIP}",
-                "Vendor.Website": vendor.Website       
-        }
-
+                "Vendor.Website": vendor.Website    
+            }
+            return result
+        except Exception as e:
+            print(f"Error in due diligence check: {str(e)}")
+            return None
 
     def update_flags(self, vendor_id, flag):
         """
-        Updates the number of flags for a vendor and the date the vendor was scanned
+        Updates the number of flags for a vendor and the date the vendor was scanned.
         """
-        vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
-        if vendor is None:
+        try:
+            # First check if vendor exists
+            vendor_response = supabase.table("Vendor").select("*").eq("ID", vendor_id).execute()
+            if not vendor_response.data:
+                return False
+
+            vendor = vendor_response.data[0]
+            flags_added = vendor.get("FlagsAdded", [])
+            flags_added.append(flag)
+
+            # Update the vendor
+            update_response = supabase.table("Vendor").update({
+                "FlagsAdded": flags_added,
+                "Flags": vendor.get("Flags", 0) + 1,
+                "DateScanned": str(date.today())
+            }).eq("ID", vendor_id).execute()
+
+            # If we get data back in the response, the update was successful
+            return bool(update_response.data)
+        except Exception as e:
+            print(f"Error updating flags: {str(e)}")
             return False
-        
-        vendor.FlagsAdded = vendor.FlagsAdded + [flag] if vendor.FlagsAdded else [flag]
-        vendor.Flags += 1
-        vendor.DateScanned = date.today()
-        self.session.commit()
-        return True
-    
 
     def get_flags(self, vendor_id):
         """
-        Returns flags a vendor has.
+        Fetches flags for a vendor.
         """
-        vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
-        if vendor is None:
-            return -1
-        
-        flags = []
-        for flag in vendor.FlagsAdded:
-            flags.append(flag)
-
-        return flags
-
+        try:
+            response = supabase.table("Vendor").select("Flags, FlagsAdded").eq("ID", vendor_id).execute()
+            
+            if response.data:
+                return response.data[0]
+            return None
+        except Exception as e:
+            print(f"Error in get_flags: {str(e)}")
+            return None
 
     def get_state_link(self, state_name):
         """
-        Returns the associated Secretary of State link for the given state
+        Fetches the Secretary of State link for a given state.
         """
-        state = self.session.query(States).filter(States.State == state_name).first()
-        if state is None:
+        try:
+            response = supabase.table("States").select("Link").eq("State", state_name).execute()
+            if response.data:
+                return response.data[0]["Link"]
             return None
-        return state.Link
-    
-    def get_vendors(self):
-        vendors = self.session.query(Vendor)
-        result = []
-        for vendor in vendors:
-            result.append({
-                "Vendor.Name": vendor.Name,
-                "Vendor.Address": f"{vendor.Street}, {vendor.City}, {vendor.State}, {vendor.ZIP}",
-                "Vendor.Website": vendor.Website,
-                "Vendor.DnbHeadquartersState": vendor.DnbHeadquartersState,
-                "Vendor.DateScanned": vendor.DateScanned,
-                "Vendor.Flags": vendor.Flags
-            })
-        return result
-    
+        except Exception as e:
+            print(f"Error fetching state link for {state_name}: {str(e)}")
+            return None
 
     def get_vendor_by_id(self, vendor_id):
-        """Returns information for specified Vendor.
         """
-        vendor = self.session.query(Vendor).filter(Vendor.ID == vendor_id).first()
-        if vendor is None:
-            return False
-        
-        return {
-            "Vendor.Name": vendor.Name,
-            "Vendor.Address": f"{vendor.Street}, {vendor.City}, {vendor.State}, {vendor.ZIP}",
-            "Vendor.Website": vendor.Website,
-            "Vendor.DnbHeadquartersState": vendor.DnbHeadquartersState,
-            "Vendor.DateScanned": vendor.DateScanned,
-            "Vendor.Flags": vendor.Flags,
-            "Vendor.FlagsAdded": self.get_flags(vendor_id)
-        }
+        Fetches vendor information by vendor ID.
+        """
+        try:
+            response = supabase.table("Vendor").select("*").eq("ID", vendor_id).execute()
+            
+            if response.data:
+                return response.data[0]
+            return None
+        except Exception as e:
+            print(f"Error in get_vendor_by_id: {str(e)}")
+            return None
+
+
