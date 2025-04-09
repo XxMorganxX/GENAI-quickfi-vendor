@@ -22,7 +22,6 @@ class DatabaseDriver:
         Fetches account information by account ID from Supabase.
         """
         try:
-            print(f"Attempting to fetch account with ID: {account_id}")
             response = supabase.table("Account").select("*").eq("ID", account_id).execute()
             print(f"Response: {response}")
                 
@@ -30,15 +29,10 @@ class DatabaseDriver:
                 return None
                 
             account = response.data[0]
-            print(f"Found account: {account}")
             
             try:
                 equipment_response = supabase.table("Equipment").select("*").eq("AccountID", account_id).execute()
-                if equipment_response.error:
-                    print(f"Error fetching equipment: {equipment_response.error}")
-                    account["Equipment"] = []
-                else:
-                    account["Equipment"] = equipment_response.data if equipment_response.data else []
+                account["Equipment"] = equipment_response.data if equipment_response.data else []
             except Exception as e:
                 print(f"Error fetching equipment: {str(e)}")
                 account["Equipment"] = []
@@ -66,7 +60,6 @@ class DatabaseDriver:
         - Vendor's flags and flags added
         """
         try:
-            
             # Get account information
             account = self.get_account_by_id(account_id)
             if not account:
@@ -78,11 +71,11 @@ class DatabaseDriver:
                 return None
 
             result = {
-                "Account.Name": account.Name,
-                "Account.Address": f"{account.Street}, {account.City}, {account.State}, {account.ZIP}",
-                "Vendor.Name": vendor.Name,
-                "Vendor.Address": f"{vendor.Street}, {vendor.City}, {vendor.State}, {vendor.ZIP}",
-                "Vendor.Website": vendor.Website    
+                "Account.Name": account["Name"],
+                "Account.Address": f"{account['Street']}, {account['City']}, {account['State']}, {account['ZIP']}",
+                "Vendor.Name": vendor["Name"],
+                "Vendor.Address": f"{vendor['Street']}, {vendor['City']}, {vendor['State']}, {vendor['ZIP']}",
+                "Vendor.Website": vendor["Website"]    
             }
             return result
         except Exception as e:
@@ -100,13 +93,13 @@ class DatabaseDriver:
                 return False
 
             vendor = vendor_response.data[0]
-            flags_added = vendor.get("FlagsAdded", [])
+            flags_added = vendor.get("Flags", [])
             flags_added.append(flag)
 
             # Update the vendor
             update_response = supabase.table("Vendor").update({
-                "FlagsAdded": flags_added,
-                "Flags": vendor.get("Flags", 0) + 1,
+                "Flags": flags_added,
+                "NumFlags": vendor.get("NumFlags", 0) + 1,
                 "DateScanned": str(date.today())
             }).eq("ID", vendor_id).execute()
 
@@ -121,7 +114,7 @@ class DatabaseDriver:
         Fetches flags for a vendor.
         """
         try:
-            response = supabase.table("Vendor").select("Flags, FlagsAdded").eq("ID", vendor_id).execute()
+            response = supabase.table("Vendor").select("NumFlags, Flags").eq("ID", vendor_id).execute()
             
             if response.data:
                 return response.data[0]
