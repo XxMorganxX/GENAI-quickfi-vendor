@@ -25,6 +25,18 @@ def success_response(body, code):
 def failure_response(message, code=404):
     return json.dumps({"error": message}), code
 
+@app.route("/account/")
+def get_accounts():
+    """Returns all accounts (sample data)"""
+    accounts = DB.get_accounts()
+    return success_response({"accounts": accounts}, 200)
+
+@app.route("/vendor/")
+def get_vendors():
+    """Returns all vendors (sample data)"""
+    vendors = DB.get_vendors()
+    return success_response({"vendors": vendors}, 200)
+ 
 
 @app.route("/account/<string:account_id>/", methods=["GET"])
 def get_account(account_id):
@@ -105,6 +117,48 @@ def secretary_of_state_link(state_name):
     if res is None:
         return failure_response("State not found")
     return success_response({"state": state_name, "url": res}, 200)
+
+
+@app.route("/vendor/<string:vendor_id>/sos/", methods=["PATCH"])
+def update_sos(vendor_id):
+    """Updates Secretary of State information for a vendor.
+    Expected JSON body: {"years": float, "active": boolean}
+    """
+    try:
+        body = json.loads(request.data)
+    except json.JSONDecodeError:
+        return failure_response("Invalid JSON", 400)
+
+    if "years" not in body or "active" not in body:
+        return failure_response("Missing 'years' or 'active' in request body", 400)
+
+    years = body["years"]
+    active = body["active"]
+
+    res = DB.update_sos_info(vendor_id, years, active)
+    if not res:
+        return failure_response("Vendor does not exist")
+    return success_response("SOS info updated successfully", 200)
+
+
+@app.route("/vendor/<string:vendor_id>/ofac/", methods=["PATCH"])
+def update_ofac(vendor_id):
+    """Updates OFAC information for a vendor.
+    Expected JSON body: {"hit_found": boolean}
+    """
+    try:
+        body = json.loads(request.data)
+    except json.JSONDecodeError:
+        return failure_response("Invalid JSON", 400)
+
+    if "hit_found" not in body:
+        return failure_response("Missing 'hit_found' in request body", 400)
+
+    hit_found = body["hit_found"]
+    res = DB.update_ofac_info(vendor_id, hit_found)
+    if not res:
+        return failure_response("Vendor does not exist")
+    return success_response("OFAC info updated successfully", 200)
 
 
 def main():

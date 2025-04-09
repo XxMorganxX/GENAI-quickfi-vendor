@@ -55,7 +55,9 @@ class DatabaseDriver:
         """
         Performs a due diligence check for a vendor associated with an account.
         Returns a dictionary containing:
-        - Account.Name, Account.Address, Vendor.Name, Vendor.Address, Vendor.Website
+        - Account information
+        - Vendor information
+        - Vendor's flags and flags added
         """
         try:
             # Get account information
@@ -82,8 +84,7 @@ class DatabaseDriver:
 
     def update_flags(self, vendor_id, flag):
         """
-        Updates the number of flags for a vendor, adds the flag to vendor's Flags field, and updates the
-        date the vendor was scanned.
+        Updates the number of flags for a vendor and the date the vendor was scanned.
         """
         try:
             # First check if vendor exists
@@ -110,7 +111,7 @@ class DatabaseDriver:
 
     def get_flags(self, vendor_id):
         """
-        Fetches flags for a vendor. Returns dictionary of NumFlags and Flags
+        Fetches flags for a vendor.
         """
         try:
             response = supabase.table("Vendor").select("NumFlags, Flags").eq("ID", vendor_id).execute()
@@ -148,5 +149,44 @@ class DatabaseDriver:
         except Exception as e:
             print(f"Error in get_vendor_by_id: {str(e)}")
             return None
+        
+    def get_vendor_by_name(self, vendor_name):
+        """
+        Fetches vendor information by vendor name.
+        """
+        response = supabase.table("Vendor").select("*").eq("Name", vendor_name).execute()
+        return response.data[0] if response.data else None
+    
+    def update_sos_info(self, vendor_id, years, active): 
+        """
+        Updates Vendor.SosYearsInBusiness (float) and Vendor.SosActive (boolean)
+        """
+        try:    
+            response = supabase.table("Vendor").update({
+                "SosYearsInBusiness": years,
+                "SosActive": active
+            }).eq("ID", vendor_id).execute()
+            return bool(response.data)
+        except Exception as e:
+            print(f"Error updating sos info: {str(e)}")
 
+    def update_ofac_info(self, vendor_id, hit_found):
+        """Updates Vendor.OfacHitFound (boolean)"""
+        try:
+            response = supabase.table("Vendor").update({
+                "OfacHitFound": hit_found
+            }).eq("ID", vendor_id).execute()
+            return bool(response.data)
+        except Exception as e:
+            print(f"Error updating ofac info: {str(e)}")
 
+    def get_accounts(self):
+        """Returns all accounts (sample data)"""
+        response = supabase.table("Account").select("*").execute()
+        return response.data if response.data else []
+    
+    def get_vendors(self):  
+        """Returns all vendors (sample data)"""
+        response = supabase.table("Vendor").select("*").execute()
+        return response.data if response.data else []
+            
