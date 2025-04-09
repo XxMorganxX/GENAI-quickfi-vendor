@@ -55,9 +55,7 @@ class DatabaseDriver:
         """
         Performs a due diligence check for a vendor associated with an account.
         Returns a dictionary containing:
-        - Account information
-        - Vendor information
-        - Vendor's flags and flags added
+        - Account.Name, Account.Address, Vendor.Name, Vendor.Address, Vendor.Website
         """
         try:
             # Get account information
@@ -84,7 +82,8 @@ class DatabaseDriver:
 
     def update_flags(self, vendor_id, flag):
         """
-        Updates the number of flags for a vendor and the date the vendor was scanned.
+        Updates the number of flags for a vendor, adds the flag to vendor's Flags field, and updates the
+        date the vendor was scanned.
         """
         try:
             # First check if vendor exists
@@ -111,7 +110,7 @@ class DatabaseDriver:
 
     def get_flags(self, vendor_id):
         """
-        Fetches flags for a vendor.
+        Fetches flags for a vendor. Returns dictionary of NumFlags and Flags
         """
         try:
             response = supabase.table("Vendor").select("NumFlags, Flags").eq("ID", vendor_id).execute()
