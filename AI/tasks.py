@@ -61,49 +61,41 @@ TASK ONE DOCS:
 - If `Vendor.Address === Account.Address` → flag
 """
 def task_one(account_id, vendor_id):
+    """
+    Compares vendor and account names/addresses for matches and updates flags accordingly.
+    """
     try:
-        payload = {
-                "account_id": account_id,
-                "vendor_id": vendor_id
-        }
-
-        request_endpoint = f"{DATABASE_URL}/duediligence/"
-
-        # Make the POST request
-        response = requests.post(request_endpoint, json=payload)
-
-        if response.status_code == 200:
-                return response.json()
-
-        data = response.json()
-
-        vendor_name, vendor_address = data["Vendor.Name"], data["Vendor.Address"]
-        account_name, account_address = data["Account.Name"], data["Account.Address"]
-
+        # Use database driver to get due diligence data
+        data = db_driver.due_diligence_check(account_id, vendor_id)
+        if data is None:
+            print("Failed to get due diligence data")
+            return None
+            
+        matches_found = False
+        
+        vendor_name = data["Vendor.Name"]
+        vendor_address = data["Vendor.Address"]
+        account_name = data["Account.Name"]
+        account_address = data["Account.Address"]
+        
+        # Check for matches and update flags
         if vendor_name == account_name or vendor_address == account_address:
             matches_found = True
             
-            # Update vendor via PATCH endpoint
-            patch_endpoint = f"{DATABASE_URL}/vendor/{vendor_id}/"
-            patch_payload = {  # Increment flag count
-                "match_type": "name" if vendor_name == account_name else "address"
-            }
-
-            patch_response = requests.patch(patch_endpoint, json=patch_payload)
-
-            if patch_response.status_code != 200:
-                print(f"Failed to update vendor. Status code: {patch_response.status_code}")
-                print(f"Response: {patch_response.text}")
-
+            # Update vendor flags directly through database driver
+            flag_type = "name/address"
+            update_success = db_driver.update_flags(vendor_id, flag_type)
+            
+            if not update_success:
+                print(f"Failed to update flags for vendor {vendor_id}")
+        
         return {
             "matches_found": matches_found,
             "data": data
         }
-
-
-
+    
     except Exception as e:
-        print(f"Database operation failed: {str(e)}")
+        print(f"Operation failed: {str(e)}")
         raise
 
 
@@ -127,6 +119,7 @@ TASK TWO DOCS:
 
 """
 def task_two(vendor_id):
+    
         
 
 
