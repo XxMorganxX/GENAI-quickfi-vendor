@@ -4,9 +4,11 @@ from sqlalchemy.dialects.postgresql import ARRAY
 import os
 import flask
 from flask import Flask, request, jsonify
+from dotenv import load_dotenv
 
 
 # Initialize Supabase client
+load_dotenv()
 PROJECTURL = os.getenv("projecturl")
 ANONKEY = os.getenv("anonkey")
 supabase: Client = create_client(PROJECTURL, ANONKEY)

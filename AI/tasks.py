@@ -1,5 +1,5 @@
 # Database
-from ..db import DatabaseDriver
+from db import DatabaseDriver
 import requests
 db_driver = DatabaseDriver()
 
