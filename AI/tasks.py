@@ -1,5 +1,5 @@
 # Database
-from db import DatabaseDriver
+from ..db import DatabaseDriver
 import requests
 db_driver = DatabaseDriver()
 
@@ -41,6 +41,7 @@ PORT = os.getenv("port")
 DBNAME = os.getenv("dbname")
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+PERPLEXITY_API_KEY = os.getenv("perplexity_api_key")
 
 
 # CONSTANTS
@@ -119,7 +120,7 @@ TASK TWO DOCS:
 
 """
 def task_two(vendor_id):
-    
+   pass 
         
 
 
@@ -128,31 +129,31 @@ def task_two(vendor_id):
 
 
 
-"""
-Task 3 Docs:
-**What AI does**:
 
-- Looks up the vendor in their state's official business registry using the `DNBaddress.state`
+# Task 3 Docs:
+# **What AI does**:
 
-**Where it connects to**:
+# - Looks up the vendor in their state's official business registry using the `DNBaddress.state`
 
-- Public Secretary of State websites (listed in SOS lookup table)
-    - e.g., for California: https://bizfileonline.sos.ca.gov/search/business
+# **Where it connects to**:
 
-**Steps**:
+# - Public Secretary of State websites (listed in SOS lookup table)
+#     - e.g., for California: https://bizfileonline.sos.ca.gov/search/business
 
-1. Use `GET /states/secretary-of-state-urls` to get the right URL
-2. Search vendor by name
-3. Scrape or read results
+# **Steps**:
 
-**What AI checks**:
+# 1. Use `GET /states/secretary-of-state-urls` to get the right URL
+# 2. Search vendor by name
+# 3. Scrape or read results
 
-- **Years in Business**:
-    - If < 5 years → flag
-- **Business Status**:
-    - If status ≠ "Active" → flag
-- **If vendor is not found at all** → flag
-"""
+# **What AI checks**:
+
+# - **Years in Business**:
+#     - If < 5 years → flag
+# - **Business Status**:
+#     - If status ≠ "Active" → flag
+# - **If vendor is not found at all** → flag
+
 def call_perplexity_api(prompt):
     """
     Call the Perplexity API to analyze HTML content.
