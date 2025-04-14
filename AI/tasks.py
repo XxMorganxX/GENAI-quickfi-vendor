@@ -622,15 +622,160 @@ async def task_three(vendor_id):
             "message": str(e)
         }
 
+def check_ofac_sanctions_list(vendor_name):
+    """
+    Uses Selenium to check the OFAC Sanctions List for the vendor name.
+    Sets the minimum score to 80 as required.
+    
+    Args:
+        vendor_name (str): Name of the vendor to check
+        
+    Returns:
+        bool: True if a match is found, False otherwise
+    """
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException, WebDriverException
+    from selenium.webdriver.chrome.options import Options
+    from webdriver_manager.chrome import ChromeDriverManager
 
+    try:
+        # Set up Chrome options
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument('--headless')  # Run in headless mode
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        
+        # Initialize the driver with webdriver-manager
+        driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), options=chrome_options)
+        driver.set_page_load_timeout(30)  # Set page load timeout
+        wait = WebDriverWait(driver, 20)  # Set explicit wait timeout
+        
+        try:
+            # Navigate to the OFAC Sanctions List search page
+            driver.get("https://sanctionssearch.ofac.treas.gov/")
+            
+            # Wait for and find the name input field
+            name_input = wait.until(
+                EC.presence_of_element_located((By.ID, "ctl00_MainContent_txtLastName"))
+            )
+            name_input.send_keys(vendor_name)
+            
+            # Set the slider value to 80 using JavaScript
+            # First, locate the hidden input that stores the slider value
+            slider_input = wait.until(
+                EC.presence_of_element_located((By.ID, "ctl00_MainContent_Slider1"))
+            )
+            
+            # Also find the visible bound control that shows the value
+            bound_control = wait.until(
+                EC.presence_of_element_located((By.ID, "ctl00_MainContent_Slider1_Boundcontrol"))
+            )
+            
+            # Use JavaScript to set both values to 80
+            driver.execute_script("arguments[0].value = '80';", slider_input)
+            driver.execute_script("arguments[0].value = '80';", bound_control)
+            
+            # Click the search button
+            search_button = wait.until(
+                EC.element_to_be_clickable((By.ID, "ctl00_MainContent_btnSearch"))
+            )
+            search_button.click()
+            
+            # Wait for results to load
+            results_text = wait.until(
+                EC.presence_of_element_located((By.ID, "ctl00_MainContent_lblResults"))
+            ).text
+            
+            print(f"Results text: {results_text}")
+            
+            # Parse the number of results found
+            match = re.search(r'Lookup Results: (\d+) Found', results_text)
+            if match:
+                match_count = int(match.group(1))
+                print(f"Found {match_count} matches")
+                return match_count > 0
+            else:
+                print("No match count found in results text")
+                # Check if there are any results in the table
+                results_table = driver.find_elements(By.CSS_SELECTOR, '#scrollResults table tr')
+                return len(results_table) > 0
+                
+        except TimeoutException as e:
+            print(f"Timeout during OFAC search: {str(e)}")
+            return True  # Be cautious and return True to trigger manual review
+            
+        except Exception as e:
+            print(f"Error during OFAC search: {str(e)}")
+            return True  # Be cautious and return True to trigger manual review
+            
+        finally:
+            driver.quit()
+            
+    except WebDriverException as e:
+        print(f"Error initializing browser: {str(e)}")
+        return True  # Be cautious and return True to trigger manual review
+        
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        return True  # Be cautious and return True to trigger manual review
 
-
-
-
-
-
-def task_four():
-     pass
+def task_four(vendor_id):
+    """
+    Performs OFAC Sanctions List check for a vendor.
+    Adds a flag if the vendor name appears on the OFAC Sanctions List.
+    
+    Args:
+        vendor_id (str): The vendor ID to check
+        
+    Returns:
+        dict: Results of the check including whether a match was found
+    """
+    try:
+        # Get vendor information
+        vendor = db_driver.get_vendor_by_id(vendor_id)
+        vendor = db_driver.get_vendor_by_name("Crown Equipment")
+        if not vendor:
+            print(f"Vendor with ID {vendor_id} not found")
+            return None
+            
+        vendor_name = vendor["Name"]
+        
+        # Check the OFAC sanctions list
+        match_found = check_ofac_sanctions_list(vendor_name)
+        
+        # Update the database with OFAC information
+        db_driver.update_ofac_info(vendor_id, match_found)
+        
+        # Add flag if a match was found
+        if match_found:
+            flag = "Vendor found on OFAC Sanctions List"
+            db_driver.update_flags(vendor_id, flag)
+            
+            return {
+                "success": True,
+                "vendor_name": vendor_name,
+                "match_found": True,
+                "flags_added": [flag],
+                "flag_count": 1
+            }
+        
+        return {
+            "success": True,
+            "vendor_name": vendor_name,
+            "match_found": False,
+            "flags_added": [],
+            "flag_count": 0
+        }
+        
+    except Exception as e:
+        print(f"Operation failed: {str(e)}")
+        return {
+            "success": False,
+            "message": str(e)
+        }
 
 def call_perplexity_dict(prompt):
     """ Calls the Perplexity API on the prompt input.
