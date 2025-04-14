@@ -18,13 +18,17 @@ class DatabaseDriver:
     Database driver for interacting with Supabase.
     Handles reading and writing information with the Supabase database.
     """
+    
+    def __init__(self):
+        self.supabase = create_client(PROJECTURL, ANONKEY)
+        print(f"Supabase client initialized with URL: {PROJECTURL}")
 
     def get_account_by_id(self, account_id=None):
         """
         Fetches account information by account ID from Supabase.
         """
         try:
-            response = supabase.table("Account").select("*").eq("ID", account_id).execute()
+            response = self.supabase.table("Account").select("*").eq("ID", account_id).execute()
             print(f"Response: {response}")
                 
             if not response.data:
@@ -33,7 +37,7 @@ class DatabaseDriver:
             account = response.data[0]
             
             try:
-                equipment_response = supabase.table("Equipment").select("*").eq("AccountID", account_id).execute()
+                equipment_response = self.supabase.table("Equipment").select("*").eq("AccountID", account_id).execute()
                 account["Equipment"] = equipment_response.data if equipment_response.data else []
             except Exception as e:
                 print(f"Error fetching equipment: {str(e)}")
@@ -49,7 +53,7 @@ class DatabaseDriver:
         """
         Fetches equipment information by account ID from Supabase.
         """
-        response = supabase.table("Equipment").select("*").eq("AccountID", account_id).execute()
+        response = self.supabase.table("Equipment").select("*").eq("AccountID", account_id).execute()
         return response.data if response.data else []
 
 
@@ -90,7 +94,7 @@ class DatabaseDriver:
         """
         try:
             # First check if vendor exists
-            vendor_response = supabase.table("Vendor").select("*").eq("ID", vendor_id).execute()
+            vendor_response = self.supabase.table("Vendor").select("*").eq("ID", vendor_id).execute()
             if not vendor_response.data:
                 return False
 
@@ -99,7 +103,7 @@ class DatabaseDriver:
             flags_added.append(flag)
 
             # Update the vendor
-            update_response = supabase.table("Vendor").update({
+            update_response = self.supabase.table("Vendor").update({
                 "Flags": flags_added,
                 "NumFlags": vendor.get("NumFlags", 0) + 1,
                 "DateScanned": str(date.today())
@@ -116,7 +120,7 @@ class DatabaseDriver:
         Fetches flags for a vendor.
         """
         try:
-            response = supabase.table("Vendor").select("NumFlags, Flags").eq("ID", vendor_id).execute()
+            response = self.supabase.table("Vendor").select("NumFlags, Flags").eq("ID", vendor_id).execute()
             
             if response.data:
                 return response.data[0]
@@ -130,7 +134,7 @@ class DatabaseDriver:
         Fetches the Secretary of State link for a given state.
         """
         try:
-            response = supabase.table("States").select("Link").eq("State", state_name).execute()
+            response = self.supabase.table("States").select("Link").eq("State", state_name).execute()
             if response.data:
                 return response.data[0]["Link"]
             return None
@@ -143,7 +147,7 @@ class DatabaseDriver:
         Fetches vendor information by vendor ID.
         """
         try:
-            response = supabase.table("Vendor").select("*").eq("ID", vendor_id).execute()
+            response = self.supabase.table("Vendor").select("*").eq("ID", vendor_id).execute()
             
             if response.data:
                 return response.data[0]
@@ -156,7 +160,7 @@ class DatabaseDriver:
         """
         Fetches vendor information by vendor name.
         """
-        response = supabase.table("Vendor").select("*").eq("Name", vendor_name).execute()
+        response = self.supabase.table("Vendor").select("*").eq("Name", vendor_name).execute()
         return response.data[0] if response.data else None
     
     def update_sos_info(self, vendor_id, years, active): 
@@ -164,7 +168,7 @@ class DatabaseDriver:
         Updates Vendor.SosYearsInBusiness (float) and Vendor.SosActive (boolean)
         """
         try:    
-            response = supabase.table("Vendor").update({
+            response = self.supabase.table("Vendor").update({
                 "SosYearsInBusiness": years,
                 "SosActive": active
             }).eq("ID", vendor_id).execute()
@@ -175,7 +179,7 @@ class DatabaseDriver:
     def update_ofac_info(self, vendor_id, hit_found):
         """Updates Vendor.OfacHitFound (boolean)"""
         try:
-            response = supabase.table("Vendor").update({
+            response = self.supabase.table("Vendor").update({
                 "OfacHitFound": hit_found
             }).eq("ID", vendor_id).execute()
             return bool(response.data)
@@ -184,11 +188,11 @@ class DatabaseDriver:
 
     def get_accounts(self):
         """Returns all accounts (sample data)"""
-        response = supabase.table("Account").select("*").execute()
+        response = self.supabase.table("Account").select("*").execute()
         return response.data if response.data else []
     
     def get_vendors(self):  
         """Returns all vendors (sample data)"""
-        response = supabase.table("Vendor").select("*").execute()
+        response = self.supabase.table("Vendor").select("*").execute()
         return response.data if response.data else []
             

@@ -127,91 +127,6 @@ TASK TWO DOCS:
 
 """
 
-# Gets dnb api access token
-def get_access_token():
-	# Sandbox endpoint URL for token request
-	url = "https://login.bisnode.com/sandbox/v1/token.oauth2"
-
-	client_id = os.getenv("client_id")
-	client_secret = os.getenv("client_secret")
-	request_scope = "credit_data_companies"
-
-	# Combine client credentials and encode them in Base64
-	credentials = f"{client_id}:{client_secret}"
-	encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
-
-	# Set up headers including Content-Type and Authorization
-	headers = {
-		"Content-Type": "application/x-www-form-urlencoded",
-		"Authorization": f"Basic {encoded_credentials}"
-	}
-
-	# Request body parameters
-	data = {
-		"grant_type": "client_credentials",
-		"scope": request_scope
-	}
-
-	try:
-		response = requests.post(url, headers=headers, data=data)
-		response.raise_for_status()  # Raises an exception for HTTP error codes
-
-		return response.json()  # Token response is returned as JSON
-	except requests.exceptions.RequestException as e:
-		print(f"Error getting token: {e}")
-		return None
-
-class TokenManager:
-	def __init__(self):
-		self._token_data = None
-
-	def get_valid_token(self):
-		"""Returns a valid token, either from cache or by requesting a new one"""
-		if self._is_token_valid():
-			print("Using existing valid token")
-			return self._token_data
-
-		print("Requesting new access token...")
-		self._token_data = get_access_token()
-		return self._token_data
-
-	def _is_token_valid(self):
-		"""Checks if the current token is valid and not expired"""
-		if not self._token_data:
-			return False
-
-		expiration_timestamp = time.time() + self._token_data["expires_in"]
-		return time.time() < (expiration_timestamp - 60)  # 60-second buffer
-
-# Modify dnb_company_search to use TokenManager
-def dnb_company_search(token_manager, company_name="Demo AB", company_address="SE"):
-	token = token_manager.get_valid_token()
-	if not token:
-		print("Failed to get valid token")
-		return None
-
-	headers = {
-		"Authorization": f"Bearer {token['access_token']}",
-		"Content-Type": "application/json",
-		"Accept": "application/json"
-	}
-
-	search_request = {
-		"name": company_name,
-		"country": company_address
-	}
-
-	url = "https://sandbox-api.bisnode.com/credit-data-companies/v2/companies"
-
-	response = requests.post(url, headers=headers, json=search_request)
-	if response.status_code == 200:
-		data = response.json()
-		print("API response:", data)
-		return data
-	else:
-		print("Error:", response.status_code, response.text)
-		return None
-
 # Validates if the search responds with a single company
 # Returns True if a single company is found, False if zero or multiple companies are found
 def task_two_validate_response(search_response):
@@ -238,6 +153,7 @@ def task_two_endpoint(name, city, state):
         response = requests.post(url, json=params)
         response.raise_for_status()
         return response.json()
+    
 def dnb_validate_search_response(search_response):
 	search_response = search_response["companies"]
 	if len(search_response) == 0:
@@ -534,9 +450,6 @@ def check_secretary_of_state(vendor_name, state):
 
 
 
-def task_three():
-     pass
-
 
 
 
@@ -722,8 +635,11 @@ def task_five(vendor_id):
     vendor_info = db_driver.get_vendor_by_id(vendor_id)
     if not vendor_info:
         raise ValueError(f"Vendor ID '{vendor_id}' not found")
-    vendor_name = vendor_info["Vendor.Name"]
-    vendor_address = vendor_info["Vendor.Address"]
+    
+    vendor_name = vendor_info["Name"]
+    vendor_address = vendor_info["Address"]
+    
+    vendor_address = f"{vendor_info['Street']}, {vendor_info['City']}, {vendor_info['State']}, {vendor_info['ZIP']}"
 
     # Raise business address and website flags
     address_website_flags = google_search_validation(vendor_name, vendor_address)
@@ -862,7 +778,7 @@ def send_email(body, vendor_name, recipient_email=None):
         print(f"Failed to send email: {str(e)}")
         return False
 
-def task_seven_flag_report(vendor_id):
+def task_seven(vendor_id):
         try:
             # Get vendor information
             vendor = db_driver.get_vendor_by_id(vendor_id)
@@ -890,4 +806,3 @@ def task_seven_flag_report(vendor_id):
             print(f"Operation failed: {str(e)}")
             return False
 
-task_seven_flag_report("V101")
