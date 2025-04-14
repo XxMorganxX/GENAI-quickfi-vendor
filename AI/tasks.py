@@ -24,7 +24,7 @@ load_dotenv()
 import json, csv, base64, time
 from pathlib import Path
 
-import playwright
+from playwright.async_api import async_playwright
 
 
 
@@ -325,36 +325,58 @@ def call_perplexity_api(prompt):
         str: Perplexity's response
     """
     try:
-        # This is a placeholder for your actual Perplexity API call
-        # You would need to implement this based on Perplexity's API documentation
         headers = {
             "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
             "Content-Type": "application/json"
         }
 
         data = {
-            "prompt": prompt,
-            "model": "pplx-7b-online"  # Or whatever model is appropriate
+            #"model": "llama-3.1-sonar-small-128k-online",
+            "model": "sonar",
+
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Be precise and concise."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "return_citations": True,
+            "stream": False
         }
 
         response = requests.post(
-            "https://api.perplexity.ai/completions",
+            "https://api.perplexity.ai/chat/completions",
             headers=headers,
             json=data
         )
 
         if response.status_code == 200:
-            return response.json()["completion"]
+            return response.json()["choices"][0]["message"]["content"]
         else:
+            # Print detailed error information
+            print(f"Perplexity API Error Details:")
+            print(f"Status Code: {response.status_code}")
+            print(f"Response Headers: {response.headers}")
+            print(f"Response Body: {response.text}")
+            print(f"Request Headers: {headers}")
+            print(f"Request Data: {data}")
+            
             return json.dumps({
                 "found": False,
                 "registration_date": None,
                 "years_in_business": None,
                 "status": None,
-                "explanation": f"API error: {response.status_code}"
+                "explanation": f"API error: {response.status_code} - {response.text}"
             })
 
     except Exception as e:
+        print(f"Error calling Perplexity API: {str(e)}")
         return json.dumps({
             "found": False,
             "registration_date": None,
@@ -363,114 +385,53 @@ def call_perplexity_api(prompt):
             "explanation": f"Error calling Perplexity API: {str(e)}"
         })
 
-def get_sos_search_results(sos_url, vendor_name):
-    """
-    Navigate to a Secretary of State website and perform a search.
-
-    Args:
-        sos_url (str): URL of the Secretary of State website
-        vendor_name (str): Name of the vendor to search for
-
-    Returns:
-        str: HTML content of the search results page
-    """
-    try:
-        # Initialize browser (headless mode)
-        browser = playwright.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
-
-        # Navigate to the SOS website
-        page.goto(sos_url)
-
-        # Take a simple approach - just find any input field and enter the vendor name
-        # This won't work for all sites but gives Perplexity something to analyze
-        input_selectors = [
-            'input[type="text"]',
-            'input[name*="name"]',
-            'input[name*="search"]',
-            'input[name*="entity"]',
-            'input[id*="name"]',
-            'input[id*="search"]',
-            'input[id*="entity"]'
-        ]
-
-        for selector in input_selectors:
-            if page.query_selector(selector):
-                page.fill(selector, vendor_name)
-                break
-
-        # Look for a submit button and click it
-        button_selectors = [
-            'button[type="submit"]',
-            'input[type="submit"]',
-            'button:has-text("Search")',
-            'button:has-text("Lookup")',
-            'a:has-text("Search")'
-        ]
-
-        for selector in button_selectors:
-            if page.query_selector(selector):
-                page.click(selector)
-                break
-
-        # Wait for results to load
-        page.wait_for_load_state("networkidle")
-
-        # Get the HTML content
-        html_content = page.content()
-
-        # Clean up
-        browser.close()
-
-        return html_content
-
-    except Exception as e:
-        print(f"Error navigating to SOS website: {str(e)}")
-        return f"<error>Failed to navigate to {sos_url}: {str(e)}</error>"
-
 def get_state_sos_url(state):
     """
     Get the Secretary of State URL for a given state from the CSV file.
 
     Args:
-        state (str): State name in lowercase (e.g., "california")
+        state (str): State name (can be in any case)
 
     Returns:
         str: URL for the state's Secretary of State website, or None if not found
     """
     try:
-        # Get the path to the CSV file
-        # Assuming the CSV is in the same directory as this script
+        # Get the path to the CSV file - fix the path resolution
         current_dir = Path(__file__).parent.parent
         csv_path = current_dir / "secretary_of_state_lookup.csv"
+        
+        # Debug print to verify the path
+        print(f"Looking for CSV at: {csv_path}")
+        print(f"CSV exists: {csv_path.exists()}")
 
         # Read the CSV file
         with open(csv_path, 'r') as csvfile:
             reader = csv.DictReader(csvfile)
 
-            # Convert state to title case for comparison (e.g., "california" -> "California")
+            # Convert state to title case for comparison (e.g., "new york" -> "New York")
             state_title = state.title()
 
             # Search for the state in the CSV
             for row in reader:
-                if row['state'] == state_title:
+                if row['state'].lower() == state.lower():
+                    print(f"Found URL for state {state}: {row['url']}")
                     return row['url']
 
             # If state not found
+            print(f"State '{state}' not found in Secretary of State lookup table")
             return None
 
     except Exception as e:
         print(f"Error reading Secretary of State URL for {state}: {str(e)}")
         return None
 
-def check_secretary_of_state(vendor_name, state):
+async def check_secretary_of_state(vendor_name, state):
     """
-    Use Perplexity AI to check a vendor's status in a Secretary of State database.
+    Use Playwright to scrape Secretary of State website and Perplexity AI to analyze the content.
 
     Args:
         vendor_name (str): Name of the vendor to check
-        state (str): State abbreviation (e.g., "CA" for California)
+        state (str): State name (e.g., "New York")
 
     Returns:
         dict: Results including found status, years in business, and active status
@@ -481,46 +442,90 @@ def check_secretary_of_state(vendor_name, state):
         if not sos_url:
             return {"error": f"No Secretary of State URL found for {state}"}
 
-        # Use a web browser automation tool to navigate to the SOS website
-        # and perform a basic search for the vendor name
-        html_content = get_sos_search_results(sos_url, vendor_name)
+        # Use Playwright to scrape the website
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+            
+            try:
+                # Navigate to the Secretary of State website
+                await page.goto(sos_url)
+                
+                # Wait for the search form to be visible
+                await page.wait_for_selector('input[type="text"]', timeout=10000)
+                
+                # Enter the vendor name in the search field
+                await page.fill('input[type="text"]', vendor_name)
+                
+                # Click the search button
+                await page.click('button[type="submit"]')
+                
+                # Wait for results to load
+                await page.wait_for_selector('.search-results', timeout=10000)
+                
+                # Get the HTML content of the results
+                html_content = await page.content()
+                
+            except Exception as e:
+                print(f"Error scraping website: {str(e)}")
+                return {
+                    "error": f"Error scraping website: {str(e)}",
+                    "flags": ["Error accessing Secretary of State website"],
+                    "flag_count": 1
+                }
+            finally:
+                await browser.close()
 
-        # Create a prompt for Perplexity
+        # Create a prompt for Perplexity to analyze the HTML content
         prompt = f"""
-        I need to check if the business "{vendor_name}" is registered in {state} and extract specific information.
+        I have scraped the Secretary of State website for a business search. Here is the HTML content:
 
-        Based on the HTML content from the Secretary of State website, please tell me:
+        {html_content}
 
+        Please analyze this content and extract the following information:
         1. Is the business found in the registry? (Yes/No)
-        2. The age of the business (in number of years), based on the business's registration date (MM/DD/YYYY) to today?
-        3. If the current status of the business is "Active" or something of equal meaning. Also have the status.
+        2. When was the business registered? (date)
+        3. How many years has the business been operating? (calculate from registration date to today)
+        4. What is the current status of the business? (Active, Inactive, etc.)
+        5. Is the status "Active" or equivalent? (Yes/No)
 
-        Please return your answer in JSON format:
+        Return your findings in this JSON format:
         {{
             "found": true/false,
+            "registration_date": "MM/DD/YYYY" or null,
             "years_in_business": number or null,
             "status": "status text" or null,
             "active": true/false,
             "explanation": "brief explanation of findings"
         }}
-
-        HTML content:
-        {html_content}
         """
 
         # Call Perplexity API
         perplexity_response = call_perplexity_api(prompt)
-
-        # Parse the response (assuming Perplexity returns well-formed JSON)
-        results = json.loads(perplexity_response)
+        
+        # Parse the response
+        try:
+            results = json.loads(perplexity_response)
+        except json.JSONDecodeError:
+            print(f"Invalid JSON response from Perplexity: {perplexity_response}")
+            return {
+                "found": False,
+                "registration_date": None,
+                "years_in_business": None,
+                "status": None,
+                "active": False,
+                "explanation": "Error parsing Perplexity response",
+                "flags": ["Error parsing Secretary of State results"],
+                "flag_count": 1
+            }
 
         # Determine if any flags should be set based on the criteria
         flags = []
-        if not results["found"]:
+        if not results.get("found", False):
             flags.append("Business not found in registry")
-        elif results["years_in_business"] is not None and results["years_in_business"] < 5:
+        elif results.get("years_in_business") is not None and results["years_in_business"] < 5:
             flags.append(f"Business operating for only {results['years_in_business']} years")
-        elif results["status"] is not None and results["active"] == False:
+        elif results.get("status") is not None and not results.get("active", False):
             flags.append(f"Business status is '{results['status']}' instead of 'Active'")
 
         results["flags"] = flags
@@ -529,12 +534,93 @@ def check_secretary_of_state(vendor_name, state):
         return results
 
     except Exception as e:
-        return {"error": str(e), "flags": ["Error checking Secretary of State"], "flag_count": 1}
+        return {
+            "error": str(e),
+            "flags": ["Error checking Secretary of State"],
+            "flag_count": 1
+        }
 
 
 
-def task_three():
-     pass
+async def task_three(vendor_id):
+    """
+    Checks the vendor in their state's official business registry (Secretary of State).
+    Adds flags if:
+    - Business has been operating for less than 5 years
+    - Business status is not "Active"
+    - Business is not found in the registry
+    
+    Args:
+        vendor_id (str): The vendor ID to check
+        
+    Returns:
+        dict: Results of the check including any flags raised
+    """
+    try:
+        # Get vendor information
+        vendor = db_driver.get_vendor_by_id(vendor_id)
+        if not vendor:
+            print(f"Vendor with ID {vendor_id} not found")
+            return None
+            
+        vendor_name = vendor["Name"]
+        vendor_state = vendor["State"]
+        
+        # Check the vendor in the Secretary of State registry
+        sos_results = await check_secretary_of_state(vendor_name, vendor_state)
+        
+        # Process results and update vendor record
+        if "error" in sos_results:
+            # Handle error case
+            print(f"Error checking Secretary of State: {sos_results['error']}")
+            db_driver.update_flags(vendor_id, "Error checking Secretary of State")
+            return {
+                "success": False,
+                "message": sos_results["error"]
+            }
+        
+        # Update SOS info in the database
+        years_in_business = sos_results.get("years_in_business")
+        active_status = sos_results.get("active", False)
+        
+        # Update the database with SOS information
+        db_driver.update_sos_info(vendor_id, years_in_business, active_status)
+        
+        # Add flags based on the criteria
+        flags_added = []
+        
+        if not sos_results.get("found", False):
+            flag = "Business not found in Secretary of State registry"
+            db_driver.update_flags(vendor_id, flag)
+            flags_added.append(flag)
+        elif years_in_business is not None and years_in_business < 5:
+            flag = f"Business operating for only {years_in_business} years"
+            db_driver.update_flags(vendor_id, flag)
+            flags_added.append(flag)
+        elif not active_status:
+            status = sos_results.get("status", "Unknown")
+            flag = f"Business status is '{status}' instead of 'Active'"
+            db_driver.update_flags(vendor_id, flag)
+            flags_added.append(flag)
+        
+        return {
+            "success": True,
+            "vendor_name": vendor_name,
+            "state": vendor_state,
+            "found": sos_results.get("found", False),
+            "years_in_business": years_in_business,
+            "active": active_status,
+            "flags_added": flags_added,
+            "flag_count": len(flags_added)
+        }
+        
+    except Exception as e:
+        print(f"Operation failed: {str(e)}")
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
 
 
 
