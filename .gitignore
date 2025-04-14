@@ -4,3 +4,5 @@ AI/.env
 AI/testing.py
 testing.py
 commit_message.txt
+/test-data
+.pytest_cache

@@ -1,0 +1,74 @@
+TASK ONE - Vendor/Account Comparison
+Description: Compares vendor and account information to detect if they are the same entity.
+Input: account_id, vendor_id
+Checks:
+- Compares Vendor.Name with Account.Name
+- Compares Vendor.Address with Account.Address
+Flags:
+- Raises flag if names match
+- Raises flag if addresses match
+
+TASK TWO - DNB Verification
+Description: Searches DNB database for vendor information
+Input: vendor_id
+Checks:
+- Uses Vendor.Name + Vendor.Address to search DNB API
+- Validates if single company is found
+Flags:
+- If no company found
+- If multiple companies found
+Data Used Later:
+- DNBaddress.state → used to find correct Secretary of State lookup URL
+
+TASK THREE - Secretary of State Verification
+Description: Looks up vendor in state business registry
+Input: vendor_name, state
+Checks:
+- Searches state's Secretary of State business registry
+- Verifies business registration and status
+Flags:
+- If business age < 5 years
+- If business status ≠ "Active"
+- If vendor not found in registry
+
+TASK FOUR - Not implemented
+Status: Empty function, no documentation available
+
+TASK FIVE - Google Search/Maps Validation
+Description: Validates vendor using Google search and Maps
+Input: vendor_id
+Checks:
+- Google Business profile existence
+- Address consistency across Google/website
+- Physical location verification via Google Maps
+Flags:
+- No Google business listing found
+- Mismatched addresses
+- No business website found
+- Address not a physical building
+- Address appears to be P.O. box
+
+TASK SIX - Adverse News Search
+Description: Searches for negative news about vendor
+Input: vendor_id
+Checks:
+- Uses Perplexity to search for adverse news
+- Focuses on legal troubles, bankruptcy, fraud, negative media
+Flags:
+- Fraud or serious financial misconduct
+- Bankruptcy or license loss
+- Government enforcement actions > $500k
+- Major scandals with financial impact
+Note: Different sensitivity for large vs small companies
+
+TASK SEVEN - Email Report Generation
+Description: Generates and sends email report of vendor flags
+Input: vendor_id
+Function:
+- Retrieves vendor information
+- Collects all flags
+- Generates summary email
+- Sends to configured recipient
+Output: Email containing:
+- Vendor name and address
+- Summary of all flags raised 
