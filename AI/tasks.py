@@ -787,6 +787,9 @@ def task_six(vendor_id):
     If this company is a small business or startup, be more sensitive.
 
     Ignore isolated incidents involving individual employees unless the company itself was found responsible or the impact was significant.
+
+    Ignore incidents that are 20+ years ago, unless they have a clear bearing on the company's current status, reputation, or operations.
+
     Return a JSON object in the following format:
     {{
       "adverse_findings": true/false,
