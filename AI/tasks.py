@@ -304,7 +304,7 @@ def call_perplexity_api(prompt):
 
 def get_state_sos_url(state):
     """
-    Get the Secretary of State URL for a given state from the CSV file.
+    Get the Secretary of State URL for a given state using the database lookup.
 
     Args:
         state (str): State name (can be in any case)
@@ -313,28 +313,16 @@ def get_state_sos_url(state):
         str: URL for the state's Secretary of State website, or None if not found
     """
     try:
-        # Get the path to the CSV file - fix the path resolution
-        current_dir = Path(__file__).parent.parent
-        csv_path = current_dir / "secretary_of_state_lookup.csv"
+        # Format state name to lowercase and remove spaces
+        formatted_state = state.lower().replace(" ", "")
         
-        # Debug print to verify the path
-        print(f"Looking for CSV at: {csv_path}")
-        print(f"CSV exists: {csv_path.exists()}")
-
-        # Read the CSV file
-        with open(csv_path, 'r') as csvfile:
-            reader = csv.DictReader(csvfile)
-
-            # Convert state to title case for comparison (e.g., "new york" -> "New York")
-            state_title = state.title()
-
-            # Search for the state in the CSV
-            for row in reader:
-                if row['state'].lower() == state.lower():
-                    print(f"Found URL for state {state}: {row['url']}")
-                    return row['url']
-
-            # If state not found
+        # Get URL from database
+        url = db_driver.get_state_link(formatted_state)
+        
+        if url:
+            print(f"Found URL for state {state}: {url}")
+            return url
+        else:
             print(f"State '{state}' not found in Secretary of State lookup table")
             return None
 
@@ -458,9 +446,6 @@ async def check_secretary_of_state(vendor_name, state):
         }
 
 
-
-<<<<<<< HEAD
-=======
 async def task_three(vendor_id):
     """
     Checks the vendor in their state's official business registry (Secretary of State).
@@ -654,7 +639,6 @@ def task_four(vendor_id):
     try:
         # Get vendor information
         vendor = db_driver.get_vendor_by_id(vendor_id)
-        vendor = db_driver.get_vendor_by_name("Crown Equipment")
         if not vendor:
             print(f"Vendor with ID {vendor_id} not found")
             return None
