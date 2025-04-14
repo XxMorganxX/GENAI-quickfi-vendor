@@ -25,6 +25,7 @@ import json, csv, base64, time
 from pathlib import Path
 
 import playwright
+import re
 
 
 
@@ -77,30 +78,30 @@ def task_one(account_id, vendor_id):
         if data is None:
             print("Failed to get due diligence data")
             return None
-            
+
         matches_found = False
-        
+
         vendor_name = data["Vendor.Name"]
         vendor_address = data["Vendor.Address"]
         account_name = data["Account.Name"]
         account_address = data["Account.Address"]
-        
+
         # Check for matches and update flags
         if vendor_name == account_name or vendor_address == account_address:
             matches_found = True
-            
+
             # Update vendor flags directly through database driver
             flag_type = "name/address"
             update_success = db_driver.update_flags(vendor_id, flag_type)
-            
+
             if not update_success:
                 print(f"Failed to update flags for vendor {vendor_id}")
-        
+
         return {
             "matches_found": matches_found,
             "data": data
         }
-    
+
     except Exception as e:
         print(f"Operation failed: {str(e)}")
         raise
@@ -130,31 +131,31 @@ TASK TWO DOCS:
 def get_access_token():
 	# Sandbox endpoint URL for token request
 	url = "https://login.bisnode.com/sandbox/v1/token.oauth2"
-	
+
 	client_id = os.getenv("client_id")
 	client_secret = os.getenv("client_secret")
 	request_scope = "credit_data_companies"
-	
+
 	# Combine client credentials and encode them in Base64
 	credentials = f"{client_id}:{client_secret}"
 	encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
-	
+
 	# Set up headers including Content-Type and Authorization
 	headers = {
 		"Content-Type": "application/x-www-form-urlencoded",
 		"Authorization": f"Basic {encoded_credentials}"
 	}
-	
+
 	# Request body parameters
 	data = {
 		"grant_type": "client_credentials",
 		"scope": request_scope
 	}
-	
+
 	try:
 		response = requests.post(url, headers=headers, data=data)
 		response.raise_for_status()  # Raises an exception for HTTP error codes
-		
+
 		return response.json()  # Token response is returned as JSON
 	except requests.exceptions.RequestException as e:
 		print(f"Error getting token: {e}")
@@ -163,22 +164,22 @@ def get_access_token():
 class TokenManager:
 	def __init__(self):
 		self._token_data = None
-		
+
 	def get_valid_token(self):
 		"""Returns a valid token, either from cache or by requesting a new one"""
 		if self._is_token_valid():
 			print("Using existing valid token")
 			return self._token_data
-		
+
 		print("Requesting new access token...")
 		self._token_data = get_access_token()
 		return self._token_data
-	
+
 	def _is_token_valid(self):
 		"""Checks if the current token is valid and not expired"""
 		if not self._token_data:
 			return False
-			
+
 		expiration_timestamp = time.time() + self._token_data["expires_in"]
 		return time.time() < (expiration_timestamp - 60)  # 60-second buffer
 
@@ -188,7 +189,7 @@ def dnb_company_search(token_manager, company_name="Demo AB", company_address="S
 	if not token:
 		print("Failed to get valid token")
 		return None
-		
+
 	headers = {
 		"Authorization": f"Bearer {token['access_token']}",
 		"Content-Type": "application/json",
@@ -226,14 +227,14 @@ def task_two_validate_response(search_response):
 		return False
 
 def task_two_endpoint(name, city, state):
-        
+
         url = "https://qfstagingservices.azurewebsites.net/api/v1/Account/DnBFindCompany"
         params = {
                 "name": "Alta Equipment",
                 "city": "New Hudson",
                 "state": "MI",
         }
-        
+
         response = requests.post(url, json=params)
         response.raise_for_status()
         return response.json()
@@ -248,7 +249,7 @@ def dnb_validate_search_response(search_response):
 	else:
 		print("Multiple companies found")
 		return 0
-    
+
 def task_two(vendor_id):
     try:
         # Get vendor information
@@ -256,13 +257,13 @@ def task_two(vendor_id):
         if not vendor:
             print(f"Vendor with ID {vendor_id} not found")
             return None
-            
+
         vendor_name = vendor["Name"]
         vendor_city = {vendor['City']}
         vendor_state = vendor["State"]
         response = task_two_endpoint(vendor_name, vendor_city, vendor_state)
         validated = task_two_validate_response(response)
-        
+
         if validated == -1:
             update_success = db_driver.update_flags(vendor_id, "DNB - No company found")
             if not update_success:
@@ -271,17 +272,17 @@ def task_two(vendor_id):
                 "validated": validated,
                 "message": "No companies found in DNB search"
             }
-        
-        
-            
-        
+
+
+
+
     except Exception as e:
         print(f"Operation failed: {str(e)}")
         return False
-    
-    
-    
-        
+
+
+
+
 
 
 
@@ -545,6 +546,47 @@ def task_three():
 def task_four():
      pass
 
+def call_perplexity_dict(prompt):
+    """ Calls the Perplexity API on the prompt input.
+
+    Args:
+        prompt (str): The prompt Perplexity is given
+
+    Returns:
+        dict: Data returned by Perplexity
+
+    """
+    url = "https://api.perplexity.ai/chat/completions"
+    api_key = PERPLEXITY_API_KEY
+
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    data = {
+        "model": "sonar-pro",
+        "messages": [
+            {"role": "system", "content": "You are a business verification agent. Your job is to validate business listing and address consistency and return raw JSON with boolean flags."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+
+    if response.status_code == 200:
+        result = response.json()["choices"][0]["message"]["content"]
+        match = re.search(r'\{[\s\S]*?\}', result)
+        if match:
+            json_block = match.group(0)
+            return json.loads(json_block)
+        else:
+            raise ValueError("No valid JSON object found in response.")
+    else:
+        print("Error:", response.status_code)
+        print(response.text)
+
 def google_search_validation(vendor_name, vendor_address):
     """
     Uses Perplexity to Google search for the vendor and extracts the top Google
@@ -563,40 +605,36 @@ def google_search_validation(vendor_name, vendor_address):
         flags (list of str): Flags indicating issues with the vendor
     """
     # Create a prompt for Perplexity to Google search for the vendor and extract business address and website data
-    prompt = f"""
-        Please search for the business '{vendor_name}' on Google.
+    prompt = f"""Please search for the business {vendor_name} {vendor_address} on Google.
 
-        1. Is a Google Business listing with an address found?
-        2. Does this address match the address '{vendor_address}'?
-        3. Does the business have a website listed?
-        4. Is the site accessible with an address listed on the homepage or contact page, and
-            does this address match the address '{vendor_address}'?
+            1. Is a Google Business listing with an address found?
+            2. Does this address match the address {vendor_address}?
+            3. Does the business have a website listed?
+            4. Is the site accessible with an address listed on the homepage or contact page, and
+                do any of the locations lised match the address {vendor_address}?
 
-        Respond in JSON in the following format:
-        {{
-            "google_business_found": true/false,
-            "google_address_match": true/false,
-            "website_found": true/false,
-            "website_address_found": true/false,
-            "website_address_match": true/false
-        }}
-        """
+            Respond in JSON in the following format:
+            {{
+                "google_business_found": true/false,
+                "google_address_match": true/false,
+                "website_found": true/false,
+                "website_address_found": true/false,
+                "website_address_match": true/false
+            }}"""
     try:
         # Input this prompt to Perpexity and parse the response
-        perplexity_response = call_perplexity_api(prompt)
-        response = json.loads(perplexity_response)
+        response = call_perplexity_dict(prompt)
 
         # Flag for no business found, no website found, no address listed, or mismatched addresses
         flags = []
         if not response["google_business_found"]:
             flags.append("No Google business listing found")
-        else:
-            if not response["google_address_match"]:
-                flags.append("Google Business address does not match vendor address")
-            if not response["website_found"]:
-                flags.append("No business website could be found")
-            elif not response["website_address_found"] or not response["website_address_match"]:
-                flags.append("Address listed on website does not match vendor address")
+        elif not response["google_address_match"]:
+            flags.append("Google Business address does not match vendor address")
+        if not response["website_found"]:
+            flags.append("No business website could be found")
+        elif not response["website_address_found"] or not response["website_address_match"]:
+            flags.append("Address listed on website does not match vendor address")
         return flags
     except Exception as e:
         raise RuntimeError(f"Failed to Google search for vendor {vendor_name}.")
@@ -631,7 +669,7 @@ def google_maps_validation(vendor_address):
 
         # If the location is not a physical building, flag
         if location_type != "ROOFTOP":
-            return ["Address does not appear to a business establishment."]
+            return ["Address does not appear to be a physical building."]
 
         if place_id:
             places_url = "https://maps.googleapis.com/maps/api/place/details/json"
@@ -646,11 +684,12 @@ def google_maps_validation(vendor_address):
             if place_response.get("status") == "OK":
                 types = place_response["result"].get("types", [])
                 # If the location type does not correspond to a business, flag
-                if "establishment" not in types and "point_of_interest" not in types:
+                if "establishment" not in types and "point_of_interest" not in types and "premise" not in types and "street_address" not in types:
                     return ["Address does not appear to a business establishment."]
                 # If the location type corresponds to a PO box, flag
                 if "post_office" in types or "mailbox" in types:
-                    return ["Address does not appear to a business establishment."]
+                    print("B")
+                    return ["Address appears to be a P.O. box or mail drop."]
             else:
                 return ["Address details could not be found."]
         else:
@@ -692,15 +731,17 @@ def task_five(vendor_id):
 
     # Raise Google Maps presence flag
     maps_flags = google_maps_validation(vendor_address)
+    flags = address_website_flags + maps_flags
     num_flags += len(maps_flags)
 
     # Increment flags
-    result = requests.patch(f"{API_BASE_URL}/vendorflags/{vendor_id}/", json={"num_flags": num_flags})
-    if result.status_code != 204:
-        print(f"Failed to update flags for vendor id {vendor_id}: {result.status_code}")
+    for flag in flags:
+        result = db_driver.update_flags(vendor_id, flag)
+        if not result:
+            print(f"Failed to update flags for vendor id {vendor_id}")
 
     return {
-        "flags": address_website_flags + maps_flags,
+        "flags": flags,
         "num_flags": num_flags
     }
 
@@ -728,36 +769,42 @@ def task_six(vendor_id):
 
     # Create a prompt to search for adverse news associated with the vendor
     keywords = ["fraud", "lawsuit", "shutdown", "bankruptcy", "charges", "scam", "indictment", "settlement", "scandal"]
-    prompt = f"""
-        Google search for news about '{vendor_name}' combined with any of the following terms: {', '.join(keywords)}.
+    prompt = f"""Search for serious adverse news related to the business {vendor_name} combined with any of the following terms: {', '.join(keywords)}.
 
-        Check the top 5 results of each search.
+    Specifically, only raise flags if there are credible reports in the top five results of the vendor being:
+    - Found guilty or settled in lawsuits involving fraud or serious financial misconduct
+    - Shut down, declared bankruptcy, or lost licenses to operate
+    - Involved in government enforcement actions or fines exceeding $500,000
+    - The subject of widely reported scandals that caused reputational or financial damage
 
-        Check if any of the results mention the vendor being involved in:
-        - Fraud
-        - Lawsuits or legal disputes
-        - Bankruptcy or shutdown
-        - Government charges or fines
-        - Negative media exposure or public scandal
+    Do not raise flags for:
+    - Minor lawsuits or settlements
+    - Routine regulatory inspections or technical violations
+    - Public controversies unless they had major legal or financial consequences
 
-        Return a JSON object in the following format:
-        {{
-          "adverse_findings": true/false,
-          "flag_reasons": ["List of short descriptions of adverse finding such as 'Bankruptcy filing in 2020' or 'Lawsuit from partner'"]
-        }}
-    """
+    If this company is a large, established corporation (e.g. a Fortune 500 company), be less sensitive in flagging - do not include common lawsuits or resolved class actions that are typical for large companies.
+
+    If this company is a small business or startup, be more sensitive.
+
+    Ignore isolated incidents involving individual employees unless the company itself was found responsible or the impact was significant.
+    Return a JSON object in the following format:
+    {{
+      "adverse_findings": true/false,
+      "flag_reasons": ["List of short descriptions of adverse finding such as 'Bankruptcy filing in 2020' or 'Lawsuit from partner'"]
+    }}"""
     try:
         # Call Perplexity on the prompt
-        perplexity_response = call_perplexity_api(prompt)
-        response = json.loads(perplexity_response)
+        response = call_perplexity_dict(prompt)
 
         # Raise flags
         if not response["adverse_findings"]:
             return {"flags": [], "num_flags": 0}
         num_flags = len(response["flag_reasons"])
-        result = requests.patch(f"{API_BASE_URL}/vendorflags/{vendor_id}/", json={"num_flags": num_flags})
-        if result.status_code != 204:
-            print(f"Failed to update flags for vendor id {vendor_id}: {result.status_code}")
+
+        for flag in response["flag_reasons"]:
+            result = db_driver.update_flags(vendor_id, flag)
+            if not result:
+                print(f"Failed to update flags for vendor id {vendor_id}")
 
         return {
             "flags": response["flag_reasons"],
@@ -819,23 +866,23 @@ def task_seven_flag_report(vendor_id):
             if not vendor:
                 print(f"Vendor with ID {vendor_id} not found")
                 return None
-                
+
             vendor_name = vendor["Name"]
             vendor_address = f"{vendor['Street']}, {vendor['City']}, {vendor['State']}, {vendor['ZIP']}"
-            
+
             # Get flags information
             flags_info = db_driver.get_flags(vendor_id)
             if not flags_info:
                 print(f"No flags found for vendor {vendor_id}")
                 return None
-                
+
             flag_summary = "\n".join([f"- {flag}" for flag in flags_info["Flags"]])
-            
+
             body = f"Vendor Name: {vendor_name}\nVendor Address: {vendor_address}\n\nSummary of Flags:\n{flag_summary}"
             send_email(body, vendor_name)
-            
 
-        
+
+
         except Exception as e:
             print(f"Operation failed: {str(e)}")
             return False
