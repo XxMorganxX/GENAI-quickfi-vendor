@@ -156,7 +156,7 @@ def task_two_endpoint(name, city, state):
         return response.json()
     
 def task_two_validate_response(search_response):
-	search_response = search_response["dnbCompanies"]
+	search_response = search_response.get("dnbCompanies", [])
 	if len(search_response) == 0:
 		print("No companies found")
 		return -1
@@ -180,34 +180,43 @@ def task_two(vendor_id):
         vendor_state = vendor["State"]
 
         response = task_two_endpoint(vendor_name, vendor_city, vendor_state)
+        
         if response["isSuccess"] == False: 
+            update_success = db_driver.update_flags(vendor_id, "DNB - API call failed")
             return {
                 "validated": False,
                 "message": "DNB API call failed"
             }
-        print(f"TEST TASK TWO: {response}")
-        if response["message"] == 'Company not found':
-            update_success = db_driver.update_flags(vendor_id, "DNB - No company found")
-            return {
-                    "validated": True,
-                    "message": "No companies found in DNB search"
-                }
-            
-        validated = task_two_validate_response(response)
         
-
-        if validated == -1:
-            update_success = db_driver.update_flags(vendor_id, "DNB - No company found")
-            if not update_success:
-                print(f"Failed to update flags for vendor {vendor_id}")
+        # Handle both successful cases
+        if "dnbCompanies" in response:
+            # Validate number of companies found
+            validation_result = task_two_validate_response(response)
+            
+            if validation_result == 1:
+                # Exactly one company found
+                return {
+                    "validated": True,
+                    "message": "Single company found in DNB database"
+                }
+            elif validation_result == 0:
+                # Multiple companies found
+                update_success = db_driver.update_flags(vendor_id, "DNB - Multiple companies found in database")
+                return {
+                    "validated": False,
+                    "message": "Multiple companies found in DNB database"
+                }
+        else:
+            # No company found but API call was successful
+            update_success = db_driver.update_flags(vendor_id, "DNB - Successful search - No company found")
             return {
-                "validated": validated,
+                "validated": False,
                 "message": "No companies found in DNB search"
             }
 
     except Exception as e:
         print(f"Operation failed: {str(e)}")
-        return False
+        return None
 
 
 
@@ -459,10 +468,6 @@ async def check_secretary_of_state(vendor_name, state):
         }
 
 
-<<<<<<< HEAD
-
-=======
->>>>>>> d2ef1c658d232cb887a2bfebbc22ca9e1f4676f9
 async def task_three(vendor_id):
     """
     Checks the vendor in their state's official business registry (Secretary of State).
@@ -561,8 +566,6 @@ def check_ofac_sanctions_list(vendor_name):
     from selenium.webdriver.chrome.options import Options
     from webdriver_manager.chrome import ChromeDriverManager
 
-<<<<<<< HEAD
-=======
     try:
         # Set up Chrome options
         chrome_options = webdriver.ChromeOptions()
@@ -643,7 +646,6 @@ def check_ofac_sanctions_list(vendor_name):
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
         return True  # Be cautious and return True to trigger manual review
->>>>>>> d2ef1c658d232cb887a2bfebbc22ca9e1f4676f9
 
 def task_four(vendor_id):
     """

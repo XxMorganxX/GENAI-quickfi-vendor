@@ -1,0 +1,148 @@
+# Due Diligence Testing Documentation
+
+## Overview
+This document outlines the testing strategy and implementation for the vendor due diligence system. The tests validate the core functionality of vendor verification, database interactions, and notification systems.
+
+## Test Structure
+
+### Database Fixtures
+The test suite uses pytest fixtures to provide consistent test data:
+
+- `test_vendor_id`: Provides a valid vendor ID from the test database
+- `test_account_id`: Provides a valid account ID from the test database
+
+### Core Test Categories
+
+## 1. Task One Tests (Vendor-Account Comparison)
+Tests the comparison of vendor and account information to detect potential conflicts of interest.
+
+### Key Test Cases:
+- Valid vendor/account ID combinations
+- Invalid vendor ID handling 
+- Invalid account ID handling
+
+### Validation Points:
+- Response structure contains required fields:
+  - Account.Name
+  - Account.Address
+  - Vendor.Name 
+  - Vendor.Address
+  - Vendor.Website
+- Data type validation for all fields
+- Error handling for invalid inputs
+
+## 2. Task Two Tests (DNB Database Validation) 
+Tests the integration with DNB's company validation service.
+
+### Key Test Cases:
+- Valid vendor lookup
+- Invalid vendor handling
+- DNB API endpoint responses
+- API failure scenarios
+
+### Validation Points:
+- Response structure verification
+- Success/failure status handling
+- Company match validation
+- Error message formatting
+
+## 3. Task Seven Tests (Email Notification System)
+Tests the email notification system for flagged vendors.
+
+### Key Test Cases:
+- Vendors with existing flags
+- Vendors without flags
+- Invalid vendor handling
+
+### Validation Points:
+- Email sending success
+- Message formatting
+- Flag count validation
+- Error handling
+
+## 4. Configuration Tests
+Validates system configuration and environment setup.
+
+### Email Configuration Test
+Verifies presence of required environment variables:
+- sender_email_address
+- sender_email_api_pass
+- smtp_server
+- smtp_port
+- test_email_recipient
+
+## Implementation Details
+
+### Test Dependencies
+- pytest testing framework
+- DatabaseDriver class for database interactions
+- Environment configuration via dotenv
+- Network access for API integration tests
+- SMTP server access for email tests
+
+### Test Data Requirements
+- Test database with sample vendor and account data
+- Valid API credentials for DNB integration
+- SMTP server configuration for email tests
+
+### Error Handling
+Tests validate error conditions including:
+- Invalid database IDs
+- Missing environment variables
+- API failures
+- Network connectivity issues
+- Invalid data formats
+
+## Best Practices
+
+### Test Isolation
+- Each test function operates independently
+- Database state is verified before tests
+- Fixtures provide consistent test data
+
+### Skip Conditions
+Tests implement skip conditions when:
+- Required data is unavailable
+- Environment is not properly configured
+- Prerequisites are not met
+
+### Validation Strategy
+- Type checking of all response fields
+- Structure validation of API responses
+- Error message content verification
+- Status code validation
+
+## Maintenance Notes
+
+### Adding New Tests
+When adding new test cases:
+1. Use existing fixtures where applicable
+2. Follow naming convention: test_[task]_[scenario]
+3. Include comprehensive docstrings
+4. Validate both success and failure cases
+
+### Updating Tests
+When updating existing tests:
+1. Verify all validation points remain covered
+2. Update documentation to reflect changes
+3. Ensure backwards compatibility
+4. Test both positive and negative scenarios
+
+### Common Issues
+- Database connection failures
+- API rate limiting
+- SMTP server connectivity
+- Environment variable misconfiguration
+
+## Future Improvements
+1. Add mocking for external services
+2. Implement test data factories
+3. Add performance testing
+4. Expand API error scenario coverage
+5. Add parallel test execution support
+
+## Security Considerations
+- Protect test credentials
+- Validate data sanitization
+- Test injection scenarios
+- Verify error message security
