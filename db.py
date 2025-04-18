@@ -78,9 +78,9 @@ class DatabaseDriver:
 
             result = {
                 "Account.Name": account["Name"],
-                "Account.Address": f"{account['Street']}, {account['City']}, {account['State']}, {account['ZIP']}",
+                "Account.Address": f"{account['Street']}, {account['City']}, {account['State']}, {account['ZIP']}, {account['Country']}",
                 "Vendor.Name": vendor["Name"],
-                "Vendor.Address": f"{vendor['Street']}, {vendor['City']}, {vendor['State']}, {vendor['ZIP']}",
+                "Vendor.Address": f"{vendor['Street']}, {vendor['City']}, {vendor['State']}, {vendor['ZIP']}, {vendor['Country']}",
                 "Vendor.Website": vendor["Website"]    
             }
             return result
@@ -195,4 +195,16 @@ class DatabaseDriver:
         """Returns all vendors (sample data)"""
         response = self.supabase.table("Vendor").select("*").execute()
         return response.data if response.data else []
+    
+    def get_vendor_country(self, vendor_id):
+        """Returns the country of a vendor by id"""
+        try:
+            response = self.supabase.table("Vendor").select("Country").eq("ID", vendor_id).execute()
+            if response.data and len(response.data) > 0:
+                return response.data[0]["Country"]
+            return None
+        except Exception as e:
+            print(f"Error getting vendor country: {str(e)}")
+            return None
+
             
