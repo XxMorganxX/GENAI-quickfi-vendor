@@ -23,7 +23,10 @@ def test_vendor_id():
     vendors = db_driver.get_vendors()
     if not vendors:
         pytest.skip("No vendors available in database")
-    return vendors[0]["ID"]
+    
+    vendor_id = vendors[0]["ID"]
+    print(f"Vendor ID: {vendor_id}")
+    return vendor_id
 
 @pytest.fixture
 def test_account_id():
@@ -63,8 +66,13 @@ class TestTaskOne:
         assert result is None
 
 class TestTaskTwo:
-    def test_task_two_with_valid_vendor(self, test_vendor_id):
-        """Test task_two returns valid response structure"""
+    def test_task_two_with_valid_us_vendor(self, test_vendor_id):
+        """Test task_two returns valid response structure for US vendor"""
+        # First verify vendor is from US
+        vendor_country = db_driver.get_vendor_country(test_vendor_id)
+        if vendor_country != "US":
+            pytest.skip("Test vendor is not from US")
+            
         result = task_two(test_vendor_id)
         
         assert result is not None
@@ -78,22 +86,40 @@ class TestTaskTwo:
         if result["validated"] is True:
             assert result["message"] == "Single company found in DNB database"
 
+    def test_task_two_with_valid_canadian_vendor(self, test_vendor_id):
+        """Test task_two returns valid response structure for Canadian vendor"""
+        # First verify vendor is from Canada
+        vendor_country = db_driver.get_vendor_country(test_vendor_id)
+        if vendor_country != "CA":
+            pytest.skip("Test vendor is not from Canada")
+            
+        result = task_two(test_vendor_id)
+        
+        assert result is not None
+        assert isinstance(result, dict)
+        assert "validated" in result
+        assert "message" in result
+        assert isinstance(result["validated"], bool)
+        assert isinstance(result["message"], str)
+
     def test_task_two_with_invalid_vendor(self):
         """Test task_two with invalid vendor ID"""
         result = task_two("nonexistent_vendor")
         assert result is None
 
-    def test_task_two_endpoint_response(self, test_vendor_id):
-        """Test task_two_endpoint function specifically"""
+    def test_task_two_endpoint_us_vendor(self, test_vendor_id):
+        """Test task_two_endpoint function for US vendor"""
         vendor = db_driver.get_vendor_by_id(test_vendor_id)
-        if not vendor:
-            pytest.skip("Could not get vendor details")
+        vendor_country = db_driver.get_vendor_country(test_vendor_id)
+        
+        if not vendor or vendor_country != "US":
+            pytest.skip("Could not get US vendor details")
             
         from AI.tasks import task_two_endpoint
         response = task_two_endpoint(
-            vendor["Name"],
-            vendor["City"],
-            vendor["State"]
+            name=vendor["Name"],
+            city=vendor["City"],
+            state=vendor["State"]
         )
         
         assert isinstance(response, dict)
@@ -105,6 +131,43 @@ class TestTaskTwo:
             assert isinstance(response["dnbCompanies"], list)
         else:
             assert "message" in response
+
+    def test_task_two_endpoint_canadian_vendor(self, test_vendor_id):
+        """Test task_two_endpoint function for Canadian vendor"""
+        vendor = db_driver.get_vendor_by_id(test_vendor_id)
+        vendor_country = db_driver.get_vendor_country(test_vendor_id)
+        
+        if not vendor or vendor_country != "CA":
+            pytest.skip("Could not get Canadian vendor details")
+            
+        from AI.tasks import task_two_endpoint
+        response = task_two_endpoint(
+            name=vendor["Name"],
+            city=vendor["City"],
+            state=vendor["State"],
+            country="CA"
+        )
+        
+        assert isinstance(response, dict)
+        assert "isSuccess" in response
+        assert isinstance(response["isSuccess"], bool)
+        
+        if response["isSuccess"]:
+            assert "dnbCompanies" in response
+            assert isinstance(response["dnbCompanies"], list)
+        else:
+            assert "message" in response
+
+    def test_task_two_missing_country(self, test_vendor_id, monkeypatch):
+        """Test task_two when vendor country cannot be determined"""
+        def mock_get_country(self, vendor_id):
+            return None
+        
+        # Use pytest's monkeypatch to mock the method
+        monkeypatch.setattr(DatabaseDriver, "get_vendor_country", mock_get_country)
+        
+        result = task_two(test_vendor_id)
+        assert result is None
 
     def test_task_two_api_failure(self, test_vendor_id):
         """Test task_two when DNB API call fails"""

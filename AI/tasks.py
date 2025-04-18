@@ -142,19 +142,36 @@ TASK TWO DOCS:
 		print("Multiple companies found")
 		return False"""
 
-def task_two_endpoint(name, city, state):
-
-        url = "https://qfstagingservices.azurewebsites.net/api/v1/Account/DnBFindCompany"
-        params = {
-                "name": name,
-                "city": city,
-                "state": state,
-        }
-
-        response = requests.post(url, json=params)
-        response.raise_for_status()
-        return response.json()
+def task_two_endpoint(name, city, state, country=None):
+    """
+    Makes API request to DNB endpoint with country-specific formatting.
     
+    Args:
+        name (str): Vendor name
+        city (str): Vendor city 
+        state (str): Vendor state
+        country (str, optional): Country code, used for non-US vendors
+        
+    Returns:
+        dict: API response
+    """
+    url = "https://qfstagingservices.azurewebsites.net/api/v1/Account/DnBFindCompany"
+    
+    # Build params based on country
+    params = {
+        "name": name,
+        "city": city,
+        "state": state,
+    }
+    
+    # Add country param for Canadian vendors
+    if country == "CA":
+        params["country"] = country
+
+    response = requests.post(url, json=params)
+    response.raise_for_status()
+    return response.json()
+
 def task_two_validate_response(search_response):
 	search_response = search_response.get("dnbCompanies", [])
 	if len(search_response) == 0:
@@ -168,6 +185,15 @@ def task_two_validate_response(search_response):
 		return 0
 
 def task_two(vendor_id):
+    """
+    Performs validation of vendors using DNB database.
+    
+    Args:
+        vendor_id (str): The vendor ID to validate
+        
+    Returns:
+        dict: Results of the validation including any flags
+    """
     try:
         # Get vendor information
         vendor = db_driver.get_vendor_by_id(vendor_id)
@@ -175,13 +201,21 @@ def task_two(vendor_id):
             print(f"Vendor with ID {vendor_id} not found")
             return None
 
-        vendor_name = vendor["Name"]
-        vendor_city = vendor['City']
-        vendor_state = vendor["State"]
+        # Get vendor's country
+        vendor_country = db_driver.get_vendor_country(vendor_id)
+        if not vendor_country:
+            print(f"Could not determine country for vendor {vendor_id}")
+            return None
 
-        response = task_two_endpoint(vendor_name, vendor_city, vendor_state)
+        # Make API call with country-specific parameters
+        response = task_two_endpoint(
+            name=vendor["Name"],
+            city=vendor["City"],
+            state=vendor["State"],
+            country=vendor_country if vendor_country == "CA" else None
+        )
         
-        if response["isSuccess"] == False: 
+        if response["isSuccess"] == False:
             update_success = db_driver.update_flags(vendor_id, "DNB - API call failed")
             return {
                 "validated": False,
@@ -1049,10 +1083,8 @@ def task_seven(vendor_id):
             # Get flags information
             flags_info = db_driver.get_flags(vendor_id)
             if not flags_info:
-                print(f"No flags found for vendor {vendor_id}")
                 return None
             
-            print(f"Flags info: {flags_info}")
             
             if flags_info["NumFlags"] > 0 :
 

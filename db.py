@@ -201,7 +201,7 @@ class DatabaseDriver:
         try:
             response = self.supabase.table("Vendor").select("Country").eq("ID", vendor_id).execute()
             if response.data and len(response.data) > 0:
-                return response.data[0]["Country"]
+                return response.data[0]["Country"].strip()
             return None
         except Exception as e:
             print(f"Error getting vendor country: {str(e)}")
