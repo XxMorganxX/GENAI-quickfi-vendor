@@ -21,7 +21,7 @@ class DatabaseDriver:
     
     def __init__(self):
         self.supabase = create_client(PROJECTURL, ANONKEY)
-        print(f"Supabase client initialized with URL: {PROJECTURL}")
+
 
     def get_account_by_id(self, account_id=None):
         """

@@ -16,6 +16,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+import email.utils
 
 # Environment variables
 from dotenv import load_dotenv
@@ -112,7 +113,7 @@ def task_one(account_id, vendor_id):
 TASK TWO DOCS:
 
 - Uses `Vendor.Name` + `Vendor.Address` to search the DNB API
-- Connects to the DNB API (paid/commercial access) or public search: [https://www.dnb.com](https://www.dnb.com/)
+- Connects to the DNB API 
 
 **What AI looks for**:
 
@@ -129,7 +130,7 @@ TASK TWO DOCS:
 
 # Validates if the search responds with a single company
 # Returns True if a single company is found, False if zero or multiple companies are found
-def task_two_validate_response(search_response):
+"""def task_two_validate_response(search_response):
 	search_response = search_response["companies"]
 	if len(search_response) == 0:
 		print("No companies found")
@@ -139,23 +140,23 @@ def task_two_validate_response(search_response):
 		return True
 	else:
 		print("Multiple companies found")
-		return False
+		return False"""
 
 def task_two_endpoint(name, city, state):
 
         url = "https://qfstagingservices.azurewebsites.net/api/v1/Account/DnBFindCompany"
         params = {
-                "name": "Alta Equipment",
-                "city": "New Hudson",
-                "state": "MI",
+                "name": name,
+                "city": city,
+                "state": state,
         }
 
         response = requests.post(url, json=params)
         response.raise_for_status()
         return response.json()
     
-def dnb_validate_search_response(search_response):
-	search_response = search_response["companies"]
+def task_two_validate_response(search_response):
+	search_response = search_response["dnbCompanies"]
 	if len(search_response) == 0:
 		print("No companies found")
 		return -1
@@ -175,10 +176,25 @@ def task_two(vendor_id):
             return None
 
         vendor_name = vendor["Name"]
-        vendor_city = {vendor['City']}
+        vendor_city = vendor['City']
         vendor_state = vendor["State"]
+
         response = task_two_endpoint(vendor_name, vendor_city, vendor_state)
+        if response["isSuccess"] == False: 
+            return {
+                "validated": False,
+                "message": "DNB API call failed"
+            }
+        print(f"TEST TASK TWO: {response}")
+        if response["message"] == 'Company not found':
+            update_success = db_driver.update_flags(vendor_id, "DNB - No company found")
+            return {
+                    "validated": True,
+                    "message": "No companies found in DNB search"
+                }
+            
         validated = task_two_validate_response(response)
+        
 
         if validated == -1:
             update_success = db_driver.update_flags(vendor_id, "DNB - No company found")
@@ -188,9 +204,6 @@ def task_two(vendor_id):
                 "validated": validated,
                 "message": "No companies found in DNB search"
             }
-
-
-
 
     except Exception as e:
         print(f"Operation failed: {str(e)}")
@@ -459,8 +472,6 @@ async def check_secretary_of_state(vendor_name, state):
 
 
 
-<<<<<<< HEAD
-=======
 async def task_three(vendor_id):
     """
     Checks the vendor in their state's official business registry (Secretary of State).
@@ -521,7 +532,7 @@ async def task_three(vendor_id):
             flag = f"Business status is '{status}' instead of 'Active'"
             db_driver.update_flags(vendor_id, flag)
             flags_added.append(flag)
-        
+
         return {
             "success": True,
             "vendor_name": vendor_name,
@@ -541,7 +552,6 @@ async def task_three(vendor_id):
         }
 
 
->>>>>>> 4660e9d67faf8de91a9941262fe6a5d1d5a2e94c
 
 
 
@@ -729,7 +739,6 @@ def task_five(vendor_id):
         raise ValueError(f"Vendor ID '{vendor_id}' not found")
     
     vendor_name = vendor_info["Name"]
-    vendor_address = vendor_info["Address"]
     
     vendor_address = f"{vendor_info['Street']}, {vendor_info['City']}, {vendor_info['State']}, {vendor_info['ZIP']}"
 
@@ -752,7 +761,7 @@ def task_five(vendor_id):
         "flags": flags,
         "num_flags": num_flags
     }
-
+ 
 def task_six(vendor_id):
     """
     Use Perplexity to search for adverse news associated with a vendor.
@@ -829,19 +838,27 @@ def send_email(body, vendor_name, recipient_email=None):
     Send an email using SMTP.
 
     Args:
-        subject (str): Subject line of the email
         body (str): Body content of the email
+        vendor_name (str): Name of vendor for subject line
         recipient_email (str, optional): Email address of recipient. If None, uses EMAIL_RECIPIENT from env
 
     Returns:
         bool: True if email sent successfully, False otherwise
+    
+    Raises:
+        ValueError: If no recipient email is provided and EMAIL_RECIPIENT not set
+        SMTPException: If SMTP connection or sending fails
     """
     try:
         # Email configuration
-        sender_email = os.getenv("EMAIL_ADDRESS")
-        sender_password = os.getenv("EMAIL_PASSWORD")
-        smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        sender_email = os.getenv("sender_email_address")
+        sender_password = os.getenv("sender_email_api_pass")
+        smtp_server = os.getenv("smtp_server", "smtp.gmail.com")
+        smtp_port = int(os.getenv("smtp_port", "587"))
+
+        # Validate required email configuration
+        if not all([sender_email, sender_password, smtp_server, smtp_port]):
+            raise ValueError("Missing required email configuration")
 
         # Use default recipient if none provided
         if recipient_email is None:
@@ -849,25 +866,33 @@ def send_email(body, vendor_name, recipient_email=None):
             if not recipient_email:
                 raise ValueError("No recipient email provided and EMAIL_RECIPIENT not set in environment")
 
+        # Validate email addresses
+        if not all(map(lambda x: '@' in x and '.' in x, [sender_email, recipient_email])):
+            raise ValueError("Invalid email address format")
+
         # Create message
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = recipient_email
         message["Subject"] = f"Vendor Due Diligence Flags - {vendor_name}"
+        message["Date"] = email.utils.formatdate(localtime=True)
 
-        # Add body
-        message.attach(MIMEText(body, "plain"))
+        # Add body with proper encoding
+        message.attach(MIMEText(body, "plain", "utf-8"))
 
-        # Create SMTP session
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
+        # Create SMTP session with timeout
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
             server.starttls()  # Enable TLS
             server.login(sender_email, sender_password)
             server.send_message(message)
 
         return True
 
-    except Exception as e:
+    except (smtplib.SMTPException, ValueError) as e:
         print(f"Failed to send email: {str(e)}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error sending email: {str(e)}")
         return False
 
 def task_seven(vendor_id):
@@ -886,15 +911,29 @@ def task_seven(vendor_id):
             if not flags_info:
                 print(f"No flags found for vendor {vendor_id}")
                 return None
+            
+            print(f"Flags info: {flags_info}")
+            
+            if flags_info["NumFlags"] > 0 :
 
-            flag_summary = "\n".join([f"- {flag}" for flag in flags_info["Flags"]])
+                flag_summary = "\n".join([f"- {flag}" for flag in flags_info["Flags"]])
 
-            body = f"Vendor Name: {vendor_name}\nVendor Address: {vendor_address}\n\nSummary of Flags:\n{flag_summary}"
-            send_email(body, vendor_name)
-
+                body = f"Vendor Name: {vendor_name}\nVendor Address: {vendor_address}\n\nSummary of Flags:\n{flag_summary}"
+                send_email(body, vendor_name)
+            else:
+                return {
+                    "success": True,
+                    "message": "No flags found for vendor"
+                }
+            
+            return {
+                "success": True,
+                "message": "Email sent successfully"
+            }
 
 
         except Exception as e:
             print(f"Operation failed: {str(e)}")
             return False
 
+print(task_seven("V101"))
