@@ -113,7 +113,7 @@ def task_one(account_id, vendor_id):
 TASK TWO DOCS:
 
 - Uses `Vendor.Name` + `Vendor.Address` to search the DNB API
-- Connects to the DNB API 
+- Connects to the DNB API
 
 **What AI looks for**:
 
@@ -145,25 +145,25 @@ TASK TWO DOCS:
 def task_two_endpoint(name, city, state, country=None):
     """
     Makes API request to DNB endpoint with country-specific formatting.
-    
+
     Args:
         name (str): Vendor name
-        city (str): Vendor city 
+        city (str): Vendor city
         state (str): Vendor state
         country (str, optional): Country code, used for non-US vendors
-        
+
     Returns:
         dict: API response
     """
     url = "https://qfstagingservices.azurewebsites.net/api/v1/Account/DnBFindCompany"
-    
+
     # Build params based on country
     params = {
         "name": name,
         "city": city,
         "state": state,
     }
-    
+
     # Add country param for Canadian vendors
     if country == "CA":
         params["country"] = country
@@ -187,10 +187,10 @@ def task_two_validate_response(search_response):
 def task_two(vendor_id):
     """
     Performs validation of vendors using DNB database.
-    
+
     Args:
         vendor_id (str): The vendor ID to validate
-        
+
     Returns:
         dict: Results of the validation including any flags
     """
@@ -214,19 +214,19 @@ def task_two(vendor_id):
             state=vendor["State"],
             country=vendor_country if vendor_country == "CA" else None
         )
-        
+
         if response["isSuccess"] == False:
             update_success = db_driver.update_flags(vendor_id, "DNB - API call failed")
             return {
                 "validated": False,
                 "message": "DNB API call failed"
             }
-        
+
         # Handle both successful cases
         if "dnbCompanies" in response:
             # Validate number of companies found
             validation_result = task_two_validate_response(response)
-            
+
             if validation_result == 1:
                 # Exactly one company found
                 return {
@@ -339,7 +339,7 @@ def call_perplexity_api(prompt):
             print(f"Response Body: {response.text}")
             print(f"Request Headers: {headers}")
             print(f"Request Data: {data}")
-            
+
             return json.dumps({
                 "found": False,
                 "registration_date": None,
@@ -371,10 +371,10 @@ def get_state_sos_url(state):
     try:
         # Format state name to lowercase and remove spaces
         formatted_state = state.lower().replace(" ", "")
-        
+
         # Get URL from database
         url = db_driver.get_state_link(formatted_state)
-        
+
         if url:
             print(f"Found URL for state {state}: {url}")
             return url
@@ -407,26 +407,26 @@ async def check_secretary_of_state(vendor_name, state):
         async with async_playwright() as p:
             browser = await p.chromium.launch()
             page = await browser.new_page()
-            
+
             try:
                 # Navigate to the Secretary of State website
                 await page.goto(sos_url)
-                
+
                 # Wait for the search form to be visible
                 await page.wait_for_selector('input[type="text"]', timeout=10000)
-                
+
                 # Enter the vendor name in the search field
                 await page.fill('input[type="text"]', vendor_name)
-                
+
                 # Click the search button
                 await page.click('button[type="submit"]')
-                
+
                 # Wait for results to load
                 await page.wait_for_selector('.search-results', timeout=10000)
-                
+
                 # Get the HTML content of the results
                 html_content = await page.content()
-                
+
             except Exception as e:
                 print(f"Error scraping website: {str(e)}")
                 return {
@@ -463,7 +463,7 @@ async def check_secretary_of_state(vendor_name, state):
 
         # Call Perplexity API
         perplexity_response = call_perplexity_api(prompt)
-        
+
         # Parse the response
         try:
             results = json.loads(perplexity_response)
@@ -509,10 +509,10 @@ async def task_three(vendor_id):
     - Business has been operating for less than 5 years
     - Business status is not "Active"
     - Business is not found in the registry
-    
+
     Args:
         vendor_id (str): The vendor ID to check
-        
+
     Returns:
         dict: Results of the check including any flags raised
     """
@@ -522,13 +522,13 @@ async def task_three(vendor_id):
         if not vendor:
             print(f"Vendor with ID {vendor_id} not found")
             return None
-            
+
         vendor_name = vendor["Name"]
         vendor_state = vendor["State"]
-        
+
         # Check the vendor in the Secretary of State registry
         sos_results = await check_secretary_of_state(vendor_name, vendor_state)
-        
+
         # Process results and update vendor record
         if "error" in sos_results:
             # Handle error case
@@ -538,17 +538,17 @@ async def task_three(vendor_id):
                 "success": False,
                 "message": sos_results["error"]
             }
-        
+
         # Update SOS info in the database
         years_in_business = sos_results.get("years_in_business")
         active_status = sos_results.get("active", False)
-        
+
         # Update the database with SOS information
         db_driver.update_sos_info(vendor_id, years_in_business, active_status)
-        
+
         # Add flags based on the criteria
         flags_added = []
-        
+
         if not sos_results.get("found", False):
             flag = "Business not found in Secretary of State registry"
             db_driver.update_flags(vendor_id, flag)
@@ -573,7 +573,7 @@ async def task_three(vendor_id):
             "flags_added": flags_added,
             "flag_count": len(flags_added)
         }
-        
+
     except Exception as e:
         print(f"Operation failed: {str(e)}")
         return {
@@ -585,10 +585,10 @@ def check_ofac_sanctions_list(vendor_name):
     """
     Uses Selenium to check the OFAC Sanctions List for the vendor name.
     Sets the minimum score to 80 as required.
-    
+
     Args:
         vendor_name (str): Name of the vendor to check
-        
+
     Returns:
         bool: True if a match is found, False otherwise
     """
@@ -606,50 +606,50 @@ def check_ofac_sanctions_list(vendor_name):
         chrome_options.add_argument('--headless')  # Run in headless mode
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
-        
+
         # Initialize the driver with webdriver-manager
         driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), options=chrome_options)
         driver.set_page_load_timeout(30)  # Set page load timeout
         wait = WebDriverWait(driver, 20)  # Set explicit wait timeout
-        
+
         try:
             # Navigate to the OFAC Sanctions List search page
             driver.get("https://sanctionssearch.ofac.treas.gov/")
-            
+
             # Wait for and find the name input field
             name_input = wait.until(
                 EC.presence_of_element_located((By.ID, "ctl00_MainContent_txtLastName"))
             )
             name_input.send_keys(vendor_name)
-            
+
             # Set the slider value to 80 using JavaScript
             # First, locate the hidden input that stores the slider value
             slider_input = wait.until(
                 EC.presence_of_element_located((By.ID, "ctl00_MainContent_Slider1"))
             )
-            
+
             # Also find the visible bound control that shows the value
             bound_control = wait.until(
                 EC.presence_of_element_located((By.ID, "ctl00_MainContent_Slider1_Boundcontrol"))
             )
-            
+
             # Use JavaScript to set both values to 80
             driver.execute_script("arguments[0].value = '80';", slider_input)
             driver.execute_script("arguments[0].value = '80';", bound_control)
-            
+
             # Click the search button
             search_button = wait.until(
                 EC.element_to_be_clickable((By.ID, "ctl00_MainContent_btnSearch"))
             )
             search_button.click()
-            
+
             # Wait for results to load
             results_text = wait.until(
                 EC.presence_of_element_located((By.ID, "ctl00_MainContent_lblResults"))
             ).text
-            
+
             print(f"Results text: {results_text}")
-            
+
             # Parse the number of results found
             match = re.search(r'Lookup Results: (\d+) Found', results_text)
             if match:
@@ -661,22 +661,22 @@ def check_ofac_sanctions_list(vendor_name):
                 # Check if there are any results in the table
                 results_table = driver.find_elements(By.CSS_SELECTOR, '#scrollResults table tr')
                 return len(results_table) > 0
-                
+
         except TimeoutException as e:
             print(f"Timeout during OFAC search: {str(e)}")
             return True  # Be cautious and return True to trigger manual review
-            
+
         except Exception as e:
             print(f"Error during OFAC search: {str(e)}")
             return True  # Be cautious and return True to trigger manual review
-            
+
         finally:
             driver.quit()
-            
+
     except WebDriverException as e:
         print(f"Error initializing browser: {str(e)}")
         return True  # Be cautious and return True to trigger manual review
-        
+
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
         return True  # Be cautious and return True to trigger manual review
@@ -685,10 +685,10 @@ def task_four(vendor_id):
     """
     Performs OFAC Sanctions List check for a vendor.
     Adds a flag if the vendor name appears on the OFAC Sanctions List.
-    
+
     Args:
         vendor_id (str): The vendor ID to check
-        
+
     Returns:
         dict: Results of the check including whether a match was found
     """
@@ -698,20 +698,20 @@ def task_four(vendor_id):
         if not vendor:
             print(f"Vendor with ID {vendor_id} not found")
             return None
-            
+
         vendor_name = vendor["Name"]
-        
+
         # Check the OFAC sanctions list
         match_found = check_ofac_sanctions_list(vendor_name)
-        
+
         # Update the database with OFAC information
         db_driver.update_ofac_info(vendor_id, match_found)
-        
+
         # Add flag if a match was found
         if match_found:
             flag = "Vendor found on OFAC Sanctions List"
             db_driver.update_flags(vendor_id, flag)
-            
+
             return {
                 "success": True,
                 "vendor_name": vendor_name,
@@ -719,7 +719,7 @@ def task_four(vendor_id):
                 "flags_added": [flag],
                 "flag_count": 1
             }
-        
+
         return {
             "success": True,
             "vendor_name": vendor_name,
@@ -727,7 +727,7 @@ def task_four(vendor_id):
             "flags_added": [],
             "flag_count": 0
         }
-        
+
     except Exception as e:
         print(f"Operation failed: {str(e)}")
         return {
@@ -756,6 +756,7 @@ def call_perplexity_dict(prompt):
 
     data = {
         "model": "sonar-pro",
+        "temperature": 0.2,
         "messages": [
             {"role": "system", "content": "You are a business verification agent. Your job is to validate business listing and address consistency and return raw JSON with boolean flags."},
             {"role": "user", "content": prompt}
@@ -911,9 +912,9 @@ def task_five(vendor_id):
     vendor_info = db_driver.get_vendor_by_id(vendor_id)
     if not vendor_info:
         raise ValueError(f"Vendor ID '{vendor_id}' not found")
-    
+
     vendor_name = vendor_info["Name"]
-    
+
     vendor_address = f"{vendor_info['Street']}, {vendor_info['City']}, {vendor_info['State']}, {vendor_info['ZIP']}"
 
     # Raise business address and website flags
@@ -935,7 +936,7 @@ def task_five(vendor_id):
         "flags": flags,
         "num_flags": num_flags
     }
- 
+
 def task_six(vendor_id):
     """
     Use Perplexity to search for adverse news associated with a vendor.
@@ -956,35 +957,51 @@ def task_six(vendor_id):
     vendor_info = db_driver.get_vendor_by_id(vendor_id)
     if not vendor_info:
         raise ValueError(f"Vendor ID '{vendor_id}' not found")
-    vendor_name = vendor_info["Vendor.Name"]
+    vendor_name = vendor_info["Name"]
 
     # Create a prompt to search for adverse news associated with the vendor
     keywords = ["fraud", "lawsuit", "shutdown", "bankruptcy", "charges", "scam", "indictment", "settlement", "scandal"]
-    prompt = f"""Search for serious adverse news related to the business {vendor_name} combined with any of the following terms: {', '.join(keywords)}.
+    prompt = f"""Search for serious adverse news related to the business {vendor_name} combined with each of the following terms: {', '.join(keywords)}.
 
-    Specifically, only raise flags if there are credible reports in the top five results of the vendor being:
-    - Found guilty or settled in lawsuits involving fraud or serious financial misconduct
-    - Shut down, declared bankruptcy, or lost licenses to operate
-    - Involved in government enforcement actions or fines exceeding $500,000
-    - The subject of widely reported scandals that caused reputational or financial damage
+    Only raise flags if credible sources in the top 10 search results report the vendor was:
+    - Fined by a government agency over $500,000
+    - Involved in a settlement or ruling involving fraud, bribery, antitrust, or foreign corrupt practices (FCPA)
+    - Created a bankruptcy trust to shield liabilities (e.g., for asbestos or similar claims)
+    - Was the subject of ongoing government lawsuits involving antitrust, securities fraud, or consumer protection
+    - Penalized by major regulators (e.g., FTC, SEC, CNIL, EPA) for serious misconduct
 
     Do not raise flags for:
-    - Minor lawsuits or settlements
-    - Routine regulatory inspections or technical violations
-    - Public controversies unless they had major legal or financial consequences
+    - Lawsuits without major financial or reputational consequence
+    - Routine product recalls, OSHA violations, or technical regulatory infractions
+    - Incidents under $500k unless part of a larger scandal
+    - Historical incidents (20+ years ago) unless they clearly affect the company’s current operations or public trust
 
-    If this company is a large, established corporation (e.g. a Fortune 500 company), be less sensitive in flagging - do not include common lawsuits or resolved class actions that are typical for large companies.
-
-    If this company is a small business or startup, be more sensitive.
+    Treat large public companies more leniently — only flag if the issue is unusually severe (e.g., FCPA, antitrust, multimillion-dollar fines).
 
     Ignore isolated incidents involving individual employees unless the company itself was found responsible or the impact was significant.
 
     Ignore incidents that are 20+ years ago, unless they have a clear bearing on the company's current status, reputation, or operations.
 
+    Training examples:
+
+    For John Deere, might raise flags for
+    1. Settlement of $10 million in 2024 for FCPA violations, involving bribery by subsidiary Wirtgen Thailand from 2017-2020
+    2. Antitrust lawsuit filed in 2025 by FTC and multiple state attorneys general alleging unlawful repair monopoly and anti-competitive practices.
+
+    For Altec Inc., might raise no flags.
+
+    For Paccar Inc., might raise no flags.
+
+    For United Rentals, might raise flags for
+    1. SEC civil fraud charges settled by United Rentals for $14 million related to improper accounting and fraudulent transactions (2000–2002)
+    2. United Rentals permanently enjoined from violating federal securities laws as part of settlement
+    3. Widespread reporting of financial fraud and SEC enforcement action involving senior executives
+
+
     Return a JSON object in the following format:
     {{
       "adverse_findings": true/false,
-      "flag_reasons": ["List of short descriptions of adverse finding such as 'Bankruptcy filing in 2020' or 'Lawsuit from partner'"]
+      "flag_reasons": ["List of short descriptions of adverse finding such as 'Bankruptcy filing in 2020' or 'Lawsuit from partner'. Less than 20 words each."]
     }}"""
     try:
         # Call Perplexity on the prompt
@@ -1018,7 +1035,7 @@ def send_email(body, vendor_name, recipient_email=None):
 
     Returns:
         bool: True if email sent successfully, False otherwise
-    
+
     Raises:
         ValueError: If no recipient email is provided and EMAIL_RECIPIENT not set
         SMTPException: If SMTP connection or sending fails
@@ -1084,8 +1101,8 @@ def task_seven(vendor_id):
             flags_info = db_driver.get_flags(vendor_id)
             if not flags_info:
                 return None
-            
-            
+
+
             if flags_info["NumFlags"] > 0 :
 
                 flag_summary = "\n".join([f"- {flag}" for flag in flags_info["Flags"]])
@@ -1097,7 +1114,7 @@ def task_seven(vendor_id):
                     "success": True,
                     "message": "No flags found for vendor"
                 }
-            
+
             return {
                 "success": True,
                 "message": "Email sent successfully"
@@ -1107,5 +1124,3 @@ def task_seven(vendor_id):
         except Exception as e:
             print(f"Operation failed: {str(e)}")
             return False
-
-print(task_seven("V101"))
