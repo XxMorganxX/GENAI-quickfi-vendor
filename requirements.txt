@@ -1,0 +1,9 @@
+flask
+requests
+python-dotenv
+supabase
+sqlalchemy
+playwright
+webdriver-manager
+selenium
+pytest
